@@ -165,7 +165,6 @@ function Pagination({ page, totalPages }: { page: number; totalPages: number }) 
       <Link
         from={Route.fullPath}
         search={(prev: ProductsSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        disabled={page === 1}
         className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
         aria-disabled={page === 1}
       >
@@ -192,7 +191,6 @@ function Pagination({ page, totalPages }: { page: number; totalPages: number }) 
       <Link
         from={Route.fullPath}
         search={(prev: ProductsSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
-        disabled={page >= totalPages}
         className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
         aria-disabled={page >= totalPages}
       >

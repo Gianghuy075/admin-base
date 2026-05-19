@@ -1,21 +1,34 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
 import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
 import { formatVnd } from "@/lib/format";
 import { Input } from "@/components/ui/input";
-import { Search, Package } from "lucide-react";
+import { Search, Package, X } from "lucide-react";
+
+type ProductsSearch = {
+  search: string;
+  categoryId: string;
+  page: number;
+};
+
+const productsSearchSchema = z.object({
+  search: fallback(z.string(), "").default(""),
+  categoryId: fallback(z.string(), "").default(""),
+  page: fallback(z.number().int().min(1), 1).default(1),
+});
 
 export const Route = createFileRoute("/_authed/products")({
   head: () => ({ meta: [{ title: "Sản phẩm — HappyMall Admin" }] }),
+  validateSearch: zodValidator(productsSearchSchema),
   component: ProductsPage,
 });
 
 function ProductsPage() {
-  const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [page, setPage] = useState(1);
+  const { search, categoryId, page } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const limit = 20;
 
   const categories = useQuery({
@@ -35,6 +48,7 @@ function ProductsPage() {
   const list = products.data?.data ?? [];
   const total = products.data?.meta?.total ?? list.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasFilter = search || categoryId;
 
   return (
     <div>
@@ -45,20 +59,18 @@ function ProductsPage() {
           <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) =>
+              navigate({ search: (prev: ProductsSearch) => ({ ...prev, search: e.target.value, page: 1 }) })
+            }
             placeholder="Tìm theo tên sản phẩm..."
             className="pl-9 h-11 rounded-lg bg-card"
           />
         </div>
         <select
           value={categoryId}
-          onChange={(e) => {
-            setCategoryId(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) =>
+            navigate({ search: (prev: ProductsSearch) => ({ ...prev, categoryId: e.target.value, page: 1 }) })
+          }
           className="h-11 px-3 rounded-lg border border-input bg-card text-sm min-w-[180px]"
         >
           <option value="">Tất cả danh mục</option>
@@ -68,6 +80,14 @@ function ProductsPage() {
             </option>
           ))}
         </select>
+        {hasFilter && (
+          <button
+            onClick={() => navigate({ search: { search: "", categoryId: "", page: 1 } })}
+            className="h-11 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted inline-flex items-center gap-1"
+          >
+            <X className="size-4" /> Xóa lọc
+          </button>
+        )}
       </div>
 
       {products.isLoading || products.isError || list.length === 0 ? (
@@ -118,29 +138,64 @@ function ProductsPage() {
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="h-9 px-4 rounded-lg border border-input bg-card text-sm font-medium disabled:opacity-50"
-              >
-                Trước
-              </button>
-              <span className="text-sm text-muted-foreground">
-                Trang {page} / {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="h-9 px-4 rounded-lg border border-input bg-card text-sm font-medium disabled:opacity-50"
-              >
-                Sau
-              </button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} />
         </>
       )}
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
+  if (totalPages <= 1) return null;
+  const window = 2;
+  const pages: (number | "…")[] = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (
+      i === 1 ||
+      i === totalPages ||
+      (i >= page - window && i <= page + window)
+    ) {
+      pages.push(i);
+    } else if (pages[pages.length - 1] !== "…") {
+      pages.push("…");
+    }
+  }
+  return (
+    <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
+      <Link
+        from={Route.fullPath}
+        search={(prev: ProductsSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
+        className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
+        aria-disabled={page === 1}
+      >
+        Trước
+      </Link>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} className="px-2 text-muted-foreground">…</span>
+        ) : (
+          <Link
+            key={p}
+            from={Route.fullPath}
+            search={(prev: ProductsSearch) => ({ ...prev, page: p })}
+            className={`h-9 min-w-9 px-3 rounded-lg text-sm font-medium grid place-items-center ${
+              p === page
+                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
+                : "border border-input bg-card hover:bg-muted"
+            }`}
+          >
+            {p}
+          </Link>
+        ),
+      )}
+      <Link
+        from={Route.fullPath}
+        search={(prev: ProductsSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
+        className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
+        aria-disabled={page >= totalPages}
+      >
+        Sau
+      </Link>
     </div>
   );
 }

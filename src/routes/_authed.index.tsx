@@ -147,11 +147,6 @@ function DashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-0 mb-6 [&]:bg-transparent [&]:shadow-none">
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <RevenueChart orders={allOrders} />
         <StatusChart orders={allOrders} />

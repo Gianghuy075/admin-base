@@ -1,4 +1,4 @@
-const DEFAULT_BASE = "http://localhost:3000/api";
+const DEFAULT_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3000/api";
 export const API_BASE =
   typeof window !== "undefined"
     ? (localStorage.getItem("hm_api_base") || DEFAULT_BASE).replace(/\/$/, "")

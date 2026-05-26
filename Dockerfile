@@ -15,9 +15,9 @@ ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 
 
-FROM node:22-alpine AS runner
+FROM node:22-slim AS runner
 
-RUN apk add --no-cache tini
+RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

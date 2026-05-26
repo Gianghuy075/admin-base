@@ -27,4 +27,4 @@ COPY --from=builder /app/wrangler.jsonc ./
 
 EXPOSE 4000
 
-CMD ["wrangler", "dev", "--local", "dist/server/index.js", "--port", "4000"]
+CMD ["wrangler", "dev", "--local", "dist/server/index.js", "--port", "4000", "--ip", "0.0.0.0"]

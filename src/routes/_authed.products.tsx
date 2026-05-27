@@ -118,7 +118,7 @@ function ProductsPage() {
     queryFn: () =>
       apiFetch<ProductItem[]>("/products", {
         auth: false,
-        query: { search, categoryId: categoryId || undefined, page, limit },
+        query: { search, categoryId: categoryId || undefined, page, limit, showAll: true },
       }),
   });
 

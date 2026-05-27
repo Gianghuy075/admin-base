@@ -1,9 +1,13 @@
-import { useMemo, useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+
+const RichTextEditor = lazy(() =>
+  import("@/components/rich-text-editor").then((m) => ({ default: m.RichTextEditor })),
+);
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
-import { Search, Package, X, Plus } from "lucide-react";
+import { Search, Package, X, Plus, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
@@ -11,7 +15,6 @@ import { formatVnd } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +52,6 @@ type ProductItem = {
   price: number;
   stock?: number | null;
   oldPrice?: number | null;
-  image?: string | null;
   imageUrl?: string | null;
   images?: string[] | null;
   categoryId?: string | null;
@@ -61,7 +63,7 @@ type ProductFormState = {
   price: string;
   stock: string;
   oldPrice: string;
-  imageUrl: string;
+  imageUrls: string[];
   categoryId: string;
 };
 
@@ -77,7 +79,7 @@ const defaultForm: ProductFormState = {
   price: "",
   stock: "",
   oldPrice: "",
-  imageUrl: "",
+  imageUrls: [],
   categoryId: "",
 };
 
@@ -96,6 +98,7 @@ function ProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductItem | null>(null);
   const [form, setForm] = useState<ProductFormState>(defaultForm);
+  const [newImageUrl, setNewImageUrl] = useState("");
   const [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<ProductItem | null>(null);
 
@@ -125,6 +128,7 @@ function ProductsPage() {
       setDialogOpen(false);
       setEditing(null);
       setForm(defaultForm);
+      setNewImageUrl("");
       setFormError("");
     },
     onError: (error) => {
@@ -154,32 +158,51 @@ function ProductsPage() {
   const total = products.data?.meta?.total ?? list.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const hasFilter = search || categoryId;
-
-  const editingImage = useMemo(
-    () => editing?.imageUrl ?? editing?.image ?? editing?.images?.[0] ?? "",
-    [editing],
-  );
+  const isFetching = products.isFetching && !products.isLoading;
 
   function openCreate() {
     setEditing(null);
     setForm(defaultForm);
+    setNewImageUrl("");
     setFormError("");
     setDialogOpen(true);
   }
 
   function openEdit(product: ProductItem) {
     setEditing(product);
+    const fallbackImages = product.imageUrl ? [product.imageUrl] : [];
     setForm({
       name: product.name ?? "",
       description: product.description ?? "",
       price: String(product.price ?? ""),
       stock: String(product.stock ?? 0),
       oldPrice: product.oldPrice == null ? "" : String(product.oldPrice),
-      imageUrl: product.imageUrl ?? product.image ?? product.images?.[0] ?? "",
+      imageUrls: product.images?.length ? product.images : fallbackImages,
       categoryId: product.categoryId ?? "",
     });
+    setNewImageUrl("");
     setFormError("");
     setDialogOpen(true);
+
+    // Fetch full detail to get description (html) + complete images array
+    apiFetch<ProductItem & { images?: string[] }>(`/products/${product.id}`)
+      .then((res) => {
+        const p = res.data;
+        const imgs = p.images?.length ? p.images : p.imageUrl ? [p.imageUrl] : fallbackImages;
+        setForm((prev) => ({ ...prev, description: p.description ?? prev.description, imageUrls: imgs }));
+      })
+      .catch(() => {});
+  }
+
+  function addImage() {
+    const url = newImageUrl.trim();
+    if (!url) return;
+    setForm((prev) => ({ ...prev, imageUrls: [...prev.imageUrls, url] }));
+    setNewImageUrl("");
+  }
+
+  function removeImage(index: number) {
+    setForm((prev) => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== index) }));
   }
 
   function validateForm() {
@@ -212,7 +235,7 @@ function ProductsPage() {
       price: Number(form.price),
       stock: Number(form.stock),
       oldPrice: form.oldPrice.trim() ? Number(form.oldPrice) : undefined,
-      imageUrl: form.imageUrl.trim() || undefined,
+      imageUrls: form.imageUrls.filter((u) => u.trim()),
       categoryId: form.categoryId || undefined,
     };
     setFormError("");
@@ -281,9 +304,9 @@ function ProductsPage() {
         />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className={`grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 transition-opacity duration-200 ${isFetching ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
             {list.map((p) => {
-              const preview = p.imageUrl ?? p.image ?? p.images?.[0];
+              const preview = p.imageUrl ?? p.images?.[0];
               return (
                 <div
                   key={p.id}
@@ -338,7 +361,7 @@ function ProductsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Cập nhật sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
             <DialogDescription>Điền thông tin sản phẩm và lưu thay đổi.</DialogDescription>
@@ -356,13 +379,14 @@ function ProductsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="product-description">Mô tả *</Label>
-              <Textarea
-                id="product-description"
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                rows={3}
-              />
+              <Label>Mô tả *</Label>
+              <Suspense fallback={<div className="h-[160px] rounded-md border border-input bg-muted animate-pulse" />}>
+                <RichTextEditor
+                  key={editing?.id ?? "create"}
+                  value={form.description}
+                  onChange={(val) => setForm((prev) => ({ ...prev, description: val }))}
+                />
+              </Suspense>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -389,16 +413,14 @@ function ProductsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="product-image">Image URL</Label>
+              <Label htmlFor="product-old-price">Giá cũ</Label>
               <Input
-                id="product-image"
-                value={form.imageUrl}
-                onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                placeholder="https://..."
+                id="product-old-price"
+                type="number"
+                min={0}
+                value={form.oldPrice}
+                onChange={(e) => setForm((prev) => ({ ...prev, oldPrice: e.target.value }))}
               />
-              {editingImage ? (
-                <p className="text-xs text-muted-foreground">Ảnh hiện tại: {editingImage}</p>
-              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -418,15 +440,73 @@ function ProductsPage() {
               </select>
             </div>
 
+            {/* Multi-image section */}
             <div className="space-y-2">
-              <Label htmlFor="product-old-price">Giá cũ</Label>
-              <Input
-                id="product-old-price"
-                type="number"
-                min={0}
-                value={form.oldPrice}
-                onChange={(e) => setForm((prev) => ({ ...prev, oldPrice: e.target.value }))}
-              />
+              <Label>
+                Ảnh sản phẩm{" "}
+                <span className="text-muted-foreground font-normal">
+                  ({form.imageUrls.length} ảnh)
+                </span>
+              </Label>
+
+              {form.imageUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border bg-muted/30">
+                  {form.imageUrls.map((url, i) => (
+                    <div key={i} className="relative group shrink-0">
+                      <div className="size-16 rounded-lg overflow-hidden border border-border bg-muted">
+                        <img
+                          src={url}
+                          alt=""
+                          className="size-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                            (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty(
+                              "display",
+                              "flex",
+                            );
+                          }}
+                        />
+                        <div className="size-full hidden place-items-center text-muted-foreground">
+                          <ImageIcon className="size-5" />
+                        </div>
+                      </div>
+                      {i === 0 && (
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[9px] bg-primary text-primary-foreground px-1 rounded-full leading-4 whitespace-nowrap">
+                          Chính
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Input
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  placeholder="Dán URL ảnh vào đây..."
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addImage();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={addImage} className="shrink-0">
+                  <Plus className="size-4" />
+                  Thêm
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Ảnh đầu tiên sẽ là ảnh đại diện. Nhấn Enter hoặc bấm Thêm để thêm URL.
+              </p>
             </div>
 
             {formError ? <p className="text-sm text-destructive">{formError}</p> : null}

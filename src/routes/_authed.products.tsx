@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 
 const RichTextEditor = lazy(() =>
@@ -7,9 +7,10 @@ const RichTextEditor = lazy(() =>
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
-import { Search, Package, X, Plus, ImageIcon } from "lucide-react";
+import { Search, Package, X, Plus, ImageIcon, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { PageHeader, DataState } from "@/components/page-header";
 import { formatVnd } from "@/lib/format";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,8 @@ type ProductFormState = {
   categoryId: string;
 };
 
+type PendingFile = { file: File; preview: string };
+
 const productsSearchSchema = z.object({
   search: fallback(z.string(), "").default(""),
   categoryId: fallback(z.string(), "").default(""),
@@ -99,8 +102,11 @@ function ProductsPage() {
   const [editing, setEditing] = useState<ProductItem | null>(null);
   const [form, setForm] = useState<ProductFormState>(defaultForm);
   const [newImageUrl, setNewImageUrl] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
   const [deleting, setDeleting] = useState<ProductItem | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = useQuery({
     queryKey: ["categories"],
@@ -125,6 +131,7 @@ function ProductsPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success(editing ? "Cập nhật sản phẩm thành công" : "Tạo sản phẩm thành công");
+      setPendingFiles((prev) => { prev.forEach((pf) => URL.revokeObjectURL(pf.preview)); return []; });
       setDialogOpen(false);
       setEditing(null);
       setForm(defaultForm);
@@ -161,6 +168,7 @@ function ProductsPage() {
   const isFetching = products.isFetching && !products.isLoading;
 
   function openCreate() {
+    setPendingFiles((prev) => { prev.forEach((pf) => URL.revokeObjectURL(pf.preview)); return []; });
     setEditing(null);
     setForm(defaultForm);
     setNewImageUrl("");
@@ -180,6 +188,7 @@ function ProductsPage() {
       imageUrls: product.images?.length ? product.images : fallbackImages,
       categoryId: product.categoryId ?? "",
     });
+    setPendingFiles((prev) => { prev.forEach((pf) => URL.revokeObjectURL(pf.preview)); return []; });
     setNewImageUrl("");
     setFormError("");
     setDialogOpen(true);
@@ -205,6 +214,21 @@ function ProductsPage() {
     setForm((prev) => ({ ...prev, imageUrls: prev.imageUrls.filter((_, i) => i !== index) }));
   }
 
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    e.target.value = "";
+    const newPending = files.map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setPendingFiles((prev) => [...prev, ...newPending]);
+  }
+
+  function removePending(index: number) {
+    setPendingFiles((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
   function validateForm() {
     if (!form.name.trim()) return "Tên sản phẩm là bắt buộc";
     if (!form.description.trim()) return "Mô tả sản phẩm là bắt buộc";
@@ -221,25 +245,41 @@ function ProductsPage() {
     return "";
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const error = validateForm();
-    if (error) {
-      setFormError(error);
-      return;
+    if (error) { setFormError(error); return; }
+    setFormError("");
+
+    let allUrls = form.imageUrls.filter((u) => u.trim());
+
+    if (pendingFiles.length > 0) {
+      setUploading(true);
+      const results = await Promise.allSettled(pendingFiles.map((pf) => uploadToCloudinary(pf.file)));
+      setUploading(false);
+      let failed = 0;
+      for (const r of results) {
+        if (r.status === "fulfilled") allUrls.push(r.value);
+        else failed++;
+      }
+      if (failed > 0) {
+        toast.error(`${failed} ảnh tải lên thất bại`);
+        return;
+      }
     }
 
-    const payload: Record<string, unknown> = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      price: Number(form.price),
-      stock: Number(form.stock),
-      oldPrice: form.oldPrice.trim() ? Number(form.oldPrice) : undefined,
-      imageUrls: form.imageUrls.filter((u) => u.trim()),
-      categoryId: form.categoryId || undefined,
-    };
-    setFormError("");
-    saveMutation.mutate({ id: editing?.id, body: payload });
+    saveMutation.mutate({
+      id: editing?.id,
+      body: {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        price: Number(form.price),
+        stock: Number(form.stock),
+        oldPrice: form.oldPrice.trim() ? Number(form.oldPrice) : undefined,
+        imageUrls: allUrls,
+        categoryId: form.categoryId || undefined,
+      },
+    });
   }
 
   return (
@@ -360,7 +400,10 @@ function ProductsPage() {
         </>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        if (!open) setPendingFiles((prev) => { prev.forEach((pf) => URL.revokeObjectURL(pf.preview)); return []; });
+        setDialogOpen(open);
+      }}>
         <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? "Cập nhật sản phẩm" : "Thêm sản phẩm"}</DialogTitle>
@@ -445,25 +488,20 @@ function ProductsPage() {
               <Label>
                 Ảnh sản phẩm{" "}
                 <span className="text-muted-foreground font-normal">
-                  ({form.imageUrls.length} ảnh)
+                  ({form.imageUrls.length + pendingFiles.length} ảnh
+                  {pendingFiles.length > 0 && `, ${pendingFiles.length} chưa lưu`})
                 </span>
               </Label>
 
-              {form.imageUrls.length > 0 && (
+              {(form.imageUrls.length > 0 || pendingFiles.length > 0) && (
                 <div className="flex flex-wrap gap-2 p-2 rounded-lg border border-border bg-muted/30">
                   {form.imageUrls.map((url, i) => (
-                    <div key={i} className="relative group shrink-0">
+                    <div key={`ex-${i}`} className="relative group shrink-0">
                       <div className="size-16 rounded-lg overflow-hidden border border-border bg-muted">
-                        <img
-                          src={url}
-                          alt=""
-                          className="size-full object-cover"
+                        <img src={url} alt="" className="size-full object-cover"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).style.display = "none";
-                            (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty(
-                              "display",
-                              "flex",
-                            );
+                            (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty("display", "flex");
                           }}
                         />
                         <div className="size-full hidden place-items-center text-muted-foreground">
@@ -475,11 +513,27 @@ function ProductsPage() {
                           Chính
                         </span>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => removeImage(i)}
-                        className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
-                      >
+                      <button type="button" onClick={() => removeImage(i)}
+                        className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingFiles.map((pf, i) => (
+                    <div key={`pend-${i}`} className="relative group shrink-0">
+                      <div className="size-16 rounded-lg overflow-hidden border border-dashed border-primary/50 bg-muted">
+                        <img src={pf.preview} alt="" className="size-full object-cover opacity-80" />
+                      </div>
+                      {form.imageUrls.length === 0 && i === 0 && (
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[9px] bg-primary text-primary-foreground px-1 rounded-full leading-4 whitespace-nowrap">
+                          Chính
+                        </span>
+                      )}
+                      <div className="absolute top-0.5 left-0.5 size-4 rounded-full bg-background/80 grid place-items-center">
+                        <Upload className="size-2.5 text-primary" />
+                      </div>
+                      <button type="button" onClick={() => removePending(i)}
+                        className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
                         <X className="size-3" />
                       </button>
                     </div>
@@ -487,11 +541,29 @@ function ProductsPage() {
                 </div>
               )}
 
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileUpload}
+              />
               <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="shrink-0"
+                >
+                  <Upload className="size-4" />
+                  Chọn ảnh
+                </Button>
                 <Input
                   value={newImageUrl}
                   onChange={(e) => setNewImageUrl(e.target.value)}
-                  placeholder="Dán URL ảnh vào đây..."
+                  placeholder="Hoặc dán URL ảnh..."
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -501,11 +573,10 @@ function ProductsPage() {
                 />
                 <Button type="button" variant="outline" onClick={addImage} className="shrink-0">
                   <Plus className="size-4" />
-                  Thêm
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ảnh đầu tiên sẽ là ảnh đại diện. Nhấn Enter hoặc bấm Thêm để thêm URL.
+                Ảnh đầu tiên sẽ là ảnh đại diện. Ảnh local sẽ được tải lên khi bấm Lưu.
               </p>
             </div>
 
@@ -515,8 +586,10 @@ function ProductsPage() {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? "Đang lưu..." : "Lưu"}
+              <Button type="submit" disabled={saveMutation.isPending || uploading}>
+                {uploading ? (
+                  <><Loader2 className="size-4 animate-spin" /> Đang tải ảnh...</>
+                ) : saveMutation.isPending ? "Đang lưu..." : "Lưu"}
               </Button>
             </DialogFooter>
           </form>

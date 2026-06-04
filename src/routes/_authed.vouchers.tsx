@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Ticket, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 import {
   Dialog,
   DialogContent,
@@ -72,12 +75,20 @@ const defaultForm: VoucherFormState = {
   isActive: true,
 };
 
+const vouchersSearchSchema = z.object({
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+});
+
 export const Route = createFileRoute("/_authed/vouchers")({
   head: () => ({ meta: [{ title: "Voucher — HappyMall Admin" }] }),
+  validateSearch: zodValidator(vouchersSearchSchema),
   component: VouchersPage,
 });
 
 function VouchersPage() {
+  const { page, limit } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<VoucherItem | null>(null);
@@ -90,6 +101,9 @@ function VouchersPage() {
     queryFn: () => apiFetch<VoucherItem[]>("/vouchers"),
   });
   const list = q.data?.data ?? [];
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = list.slice((page - 1) * limit, page * limit);
 
   const saveMutation = useMutation({
     mutationFn: (payload: { id?: string; body: Record<string, unknown> }) =>
@@ -232,13 +246,13 @@ function VouchersPage() {
                   <TableHead>Tiêu đề & Mô tả</TableHead>
                   <TableHead className="text-right">Giá trị</TableHead>
                   <TableHead className="text-right">Đơn tối thiểu</TableHead>
-                  <TableHead className="text-center">Lượt dùng</TableHead>
+                  <TableHead className="text-right">Lượt dùng</TableHead>
                   <TableHead>Hạn dùng</TableHead>
-                  <TableHead>Hành động</TableHead>
+                  <TableHead className="text-right">Hành động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((v) => {
+                {paginatedList.map((v) => {
                   const limitStr = v.totalLimit == null ? "Không giới hạn" : `${v.usedCount ?? 0}/${v.totalLimit}`;
                   const valueStr = v.valueType === "percent" ? `${v.value}%` : `${v.value.toLocaleString("vi-VN")}₫`;
 
@@ -263,12 +277,12 @@ function VouchersPage() {
                       <TableCell className="text-right">
                         {v.minOrder && v.minOrder > 0 ? `${v.minOrder.toLocaleString("vi-VN")}₫` : "0₫"}
                       </TableCell>
-                      <TableCell className="text-center text-xs">{limitStr}</TableCell>
+                      <TableCell className="text-right text-xs">{limitStr}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {v.expiryDate ? formatDateShort(v.expiryDate) : "—"}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-3">
                           <div className="flex items-center gap-1">
                             <Switch
                               checked={Boolean(v.isActive)}
@@ -276,7 +290,7 @@ function VouchersPage() {
                                 toggleMutation.mutate({ id: v.id, isActive: checked })
                               }
                             />
-                            <span className="text-xs text-muted-foreground w-8">
+                            <span className="text-xs text-muted-foreground w-8 text-left">
                               {v.isActive ? "Bật" : "Tắt"}
                             </span>
                           </div>
@@ -294,6 +308,18 @@ function VouchersPage() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </div>
       )}
 

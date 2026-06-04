@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
 import { formatVnd, formatDate } from "@/lib/format";
 import { Input } from "@/components/ui/input";
+import { TablePagination } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -34,11 +35,13 @@ import {
 type PosOrdersSearch = {
   search: string;
   page: number;
+  limit: number;
 };
 
 const posOrdersSearchSchema = z.object({
   search: fallback(z.string(), "").default(""),
   page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
 
 type ProductItem = {
@@ -82,10 +85,9 @@ export const Route = createFileRoute("/_authed/pos-orders")({
 });
 
 function PosOrdersPage() {
-  const { search, page } = Route.useSearch();
+  const { search, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  const limit = 15;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PosOrderRow | null>(null);
@@ -109,7 +111,7 @@ function PosOrdersPage() {
   const productsList = productsQuery.data?.data ?? [];
 
   const posOrders = useQuery({
-    queryKey: ["pos-orders", { search, page }],
+    queryKey: ["pos-orders", { search, page, limit }],
     queryFn: () =>
       apiFetch<PosOrderRow[]>("/pos-orders", {
         query: { search, page, limit },
@@ -336,44 +338,44 @@ function PosOrdersPage() {
                     <TableHead className="text-right">Tổng tiền</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Ngày tạo</TableHead>
-                    <TableHead>Hành động</TableHead>
+                    <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {list.map((o) => (
                     <TableRow key={o.id} className="hover:bg-muted/30">
-                      <td className="font-mono font-semibold">{o.code}</td>
-                      <td>
+                      <TableCell className="font-mono font-semibold">{o.code}</TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-1.5 font-medium">
                           <User className="size-3.5 text-muted-foreground" />
                           {o.customerName || "Khách vãng lai"}
                         </div>
-                      </td>
-                      <td>{o.customerPhone ? (
+                      </TableCell>
+                      <TableCell>{o.customerPhone ? (
                         <div className="flex items-center gap-1 text-xs">
                           <Phone className="size-3 text-muted-foreground" />
                           {o.customerPhone}
                         </div>
-                      ) : "—"}</td>
-                      <td>
+                      ) : "—"}</TableCell>
+                      <TableCell>
                         <span className="inline-flex items-center gap-1 text-xs font-medium rounded-md px-2 py-0.5 bg-secondary text-secondary-foreground">
                           <Truck className="size-3" />
                           {o.shippingProvider}
                         </span>
-                      </td>
-                      <td className="max-w-[200px] truncate text-muted-foreground text-xs">
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">
                         {o.items.map((i) => `${i.name} (x${i.quantity})`).join(", ")}
-                      </td>
-                      <td className="text-right font-bold text-primary">{formatVnd(o.total)}</td>
-                      <td>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">{formatVnd(o.total)}</TableCell>
+                      <TableCell>
                         <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
                           <CheckCircle2 className="size-3" />
                           Đã hoàn thành
                         </span>
                       </td>
-                      <td className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
-                      <td>
-                        <div className="flex gap-1.5">
+                      <TableCell className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-1.5 justify-end">
                           <Button size="sm" variant="outline" onClick={() => openEdit(o)}>
                             Sửa
                           </Button>
@@ -381,14 +383,25 @@ function PosOrdersPage() {
                             Xóa
                           </Button>
                         </div>
-                      </td>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           </div>
-          <Pagination page={page} totalPages={totalPages} />
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </>
       )}
 
@@ -632,60 +645,6 @@ function PosOrdersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
-  if (totalPages <= 1) return null;
-  const navigate = useNavigate();
-  const window = 2;
-  const pages: (number | "…")[] = [];
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= page - window && i <= page + window)) {
-      pages.push(i);
-    } else if (pages[pages.length - 1] !== "…") {
-      pages.push("…");
-    }
-  }
-  return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
-      <Link
-        from={Route.fullPath}
-        search={(prev: PosOrdersSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        className="inline-flex h-9 items-center rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        aria-disabled={page === 1}
-      >
-        Trước
-      </Link>
-      {pages.map((p, i) =>
-        p === "…" ? (
-          <span key={`e${i}`} className="px-2 text-muted-foreground">
-            …
-          </span>
-        ) : (
-          <Link
-            key={p}
-            from={Route.fullPath}
-            search={(prev: PosOrdersSearch) => ({ ...prev, page: p })}
-            className={`grid h-9 min-w-9 place-items-center rounded-lg px-3 text-sm font-medium ${
-              p === page
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
-                : "border border-input bg-card hover:bg-muted"
-            }`}
-          >
-            {p}
-          </Link>
-        ),
-      )}
-      <Link
-        from={Route.fullPath}
-        search={(prev: PosOrdersSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
-        className="inline-flex h-9 items-center rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        aria-disabled={page >= totalPages}
-      >
-        Sau
-      </Link>
     </div>
   );
 }

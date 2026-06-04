@@ -10,6 +10,7 @@ import { PageHeader, DataState } from "@/components/page-header";
 import { formatDate } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { TablePagination } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,9 +39,8 @@ type UserItem = {
 const usersSearchSchema = z.object({
   q: fallback(z.string(), "").default(""),
   page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
-
-const LIMIT = 20;
 
 export const Route = createFileRoute("/_authed/users")({
   head: () => ({ meta: [{ title: "Khách hàng Zalo OA — HappyMall Admin" }] }),
@@ -49,20 +49,20 @@ export const Route = createFileRoute("/_authed/users")({
 });
 
 function UsersPage() {
-  const { q, page } = Route.useSearch();
+  const { q, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<UserItem | null>(null);
 
   const query = useQuery({
-    queryKey: ["users-admin", { q, page }],
+    queryKey: ["users-admin", { q, page, limit }],
     queryFn: () =>
       apiFetch<UserItem[]>("/users/admin", {
         query: {
           search: q || undefined,
           page,
-          limit: LIMIT,
+          limit,
         },
       }),
   });
@@ -103,7 +103,7 @@ function UsersPage() {
 
   const list = query.data?.data ?? [];
   const total = Number(query.data?.meta?.total ?? list.length);
-  const responseLimit = Number(query.data?.meta?.limit ?? LIMIT);
+  const responseLimit = Number(query.data?.meta?.limit ?? limit);
   const totalPages = Math.max(1, Math.ceil(total / responseLimit));
   const hasFilter = Boolean(q);
 
@@ -148,12 +148,12 @@ function UsersPage() {
           <div className="overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border/50">
                   <tr>
                     <th className="px-6 py-4 text-left">Khách hàng</th>
                     <th className="px-6 py-4 text-left">Zalo ID</th>
                     <th className="px-6 py-4 text-left">Điện thoại</th>
-                    <th className="px-6 py-4 text-left">Điểm tích lũy</th>
+                    <th className="px-6 py-4 text-right">Điểm tích lũy</th>
                     <th className="px-6 py-4 text-left">Ngày liên kết</th>
                     <th className="px-6 py-4 text-right">Hành động</th>
                   </tr>
@@ -161,7 +161,7 @@ function UsersPage() {
                 <tbody>
                   {list.map((user) => (
                     <tr key={user.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 text-left">
                         <div className="flex items-center gap-3">
                           <img
                             src={user.avatar}
@@ -174,14 +174,14 @@ function UsersPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{user.zaloId}</td>
-                      <td className="px-6 py-4 font-medium text-foreground">{user.phone}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 text-left font-mono text-xs text-muted-foreground">{user.zaloId}</td>
+                      <td className="px-6 py-4 text-left font-medium text-foreground">{user.phone}</td>
+                      <td className="px-6 py-4 text-right">
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
                           ⭐ {user.points} điểm
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">
+                      <td className="px-6 py-4 text-left text-muted-foreground">
                         {formatDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -216,7 +216,18 @@ function UsersPage() {
               </table>
             </div>
           </div>
-          <UsersPagination page={page} totalPages={totalPages} />
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </>
       )}
 
@@ -307,55 +318,4 @@ function UsersPage() {
   );
 }
 
-function UsersPagination({ page, totalPages }: { page: number; totalPages: number }) {
-  if (totalPages <= 1) return null;
-  const pages: (number | "…")[] = [];
-  const window = 2;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= page - window && i <= page + window)) {
-      pages.push(i);
-    } else if (pages[pages.length - 1] !== "…") {
-      pages.push("…");
-    }
-  }
-  return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
-      <Link
-        from={Route.fullPath}
-        search={(prev: UsersSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center"
-        aria-disabled={page === 1}
-      >
-        Trước
-      </Link>
-      {pages.map((p, index) =>
-        p === "…" ? (
-          <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
-            …
-          </span>
-        ) : (
-          <Link
-            key={p}
-            from={Route.fullPath}
-            search={(prev: UsersSearch) => ({ ...prev, page: p })}
-            className={`grid h-9 min-w-9 place-items-center rounded-lg px-3 text-sm font-medium ${
-              p === page
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
-                : "border border-input bg-card hover:bg-muted"
-            }`}
-          >
-            {p}
-          </Link>
-        ),
-      )}
-      <Link
-        from={Route.fullPath}
-        search={(prev: UsersSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
-        className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center"
-        aria-disabled={page >= totalPages}
-      >
-        Sau
-      </Link>
-    </div>
-  );
-}
+// Removed duplicate local pagination

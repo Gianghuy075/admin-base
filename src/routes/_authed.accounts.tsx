@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { TablePagination } from "@/components/table-pagination";
 import {
   Dialog,
   DialogContent,
@@ -48,9 +49,8 @@ type StaffItem = {
 const accountsSearchSchema = z.object({
   q: fallback(z.string(), "").default(""),
   page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
-
-const LIMIT = 20;
 
 export const Route = createFileRoute("/_authed/accounts")({
   head: () => ({ meta: [{ title: "Tài khoản nhân viên — HappyMall Admin" }] }),
@@ -59,7 +59,7 @@ export const Route = createFileRoute("/_authed/accounts")({
 });
 
 function AccountsPage() {
-  const { q, page } = Route.useSearch();
+  const { q, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
 
@@ -77,13 +77,13 @@ function AccountsPage() {
   const [formError, setFormError] = useState("");
 
   const query = useQuery({
-    queryKey: ["staff-admin", { q, page }],
+    queryKey: ["staff-admin", { q, page, limit }],
     queryFn: () =>
       apiFetch<StaffItem[]>("/staff/admin", {
         query: {
           search: q || undefined,
           page,
-          limit: LIMIT,
+          limit,
         },
       }),
   });
@@ -160,7 +160,7 @@ function AccountsPage() {
 
   const list = query.data?.data ?? [];
   const total = Number(query.data?.meta?.total ?? list.length);
-  const responseLimit = Number(query.data?.meta?.limit ?? LIMIT);
+  const responseLimit = Number(query.data?.meta?.limit ?? limit);
   const totalPages = Math.max(1, Math.ceil(total / responseLimit));
   const hasFilter = Boolean(q);
 
@@ -306,7 +306,7 @@ function AccountsPage() {
           <div className="overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground border-b border-border/50">
                   <tr>
                     <th className="px-6 py-4 text-left">Nhân viên</th>
                     <th className="px-6 py-4 text-left">Tài khoản</th>
@@ -318,7 +318,7 @@ function AccountsPage() {
                 <tbody>
                   {list.map((staff) => (
                     <tr key={staff.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 text-left">
                         <div className="flex items-center gap-2.5">
                           <div className="size-8 rounded-lg bg-primary/10 text-primary font-bold text-sm grid place-items-center uppercase shadow-sm">
                             {staff.name.slice(0, 2)}
@@ -326,9 +326,9 @@ function AccountsPage() {
                           <span className="font-semibold text-foreground">{staff.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 font-medium text-foreground">{staff.username}</td>
-                      <td className="px-6 py-4">{getRoleBadge(staff.role)}</td>
-                      <td className="px-6 py-4 text-muted-foreground">
+                      <td className="px-6 py-4 text-left font-medium text-foreground">{staff.username}</td>
+                      <td className="px-6 py-4 text-left">{getRoleBadge(staff.role)}</td>
+                      <td className="px-6 py-4 text-left text-muted-foreground">
                         {formatDate(staff.createdAt)}
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -371,7 +371,18 @@ function AccountsPage() {
               </table>
             </div>
           </div>
-          <AccountsPagination page={page} totalPages={totalPages} />
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </>
       )}
 
@@ -515,55 +526,4 @@ function AccountsPage() {
   );
 }
 
-function AccountsPagination({ page, totalPages }: { page: number; totalPages: number }) {
-  if (totalPages <= 1) return null;
-  const pages: (number | "…")[] = [];
-  const window = 2;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= page - window && i <= page + window)) {
-      pages.push(i);
-    } else if (pages[pages.length - 1] !== "…") {
-      pages.push("…");
-    }
-  }
-  return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
-      <Link
-        from={Route.fullPath}
-        search={(prev: AccountsSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center"
-        aria-disabled={page === 1}
-      >
-        Trước
-      </Link>
-      {pages.map((p, index) =>
-        p === "…" ? (
-          <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">
-            …
-          </span>
-        ) : (
-          <Link
-            key={p}
-            from={Route.fullPath}
-            search={(prev: AccountsSearch) => ({ ...prev, page: p })}
-            className={`grid h-9 min-w-9 place-items-center rounded-lg px-3 text-sm font-medium ${
-              p === page
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
-                : "border border-input bg-card hover:bg-muted"
-            }`}
-          >
-            {p}
-          </Link>
-        ),
-      )}
-      <Link
-        from={Route.fullPath}
-        search={(prev: AccountsSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
-        className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center"
-        aria-disabled={page >= totalPages}
-      >
-        Sau
-      </Link>
-    </div>
-  );
-}
+// Removed duplicate local pagination

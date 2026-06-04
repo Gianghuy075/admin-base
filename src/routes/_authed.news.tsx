@@ -1,6 +1,9 @@
 import { lazy, Suspense, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 import { Newspaper, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -78,12 +81,20 @@ const defaultForm: NewsFormState = {
   tag: "",
 };
 
+const newsSearchSchema = z.object({
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+});
+
 export const Route = createFileRoute("/_authed/news")({
   head: () => ({ meta: [{ title: "Tin tức — HappyMall Admin" }] }),
+  validateSearch: zodValidator(newsSearchSchema),
   component: NewsPage,
 });
 
 function NewsPage() {
+  const { page, limit } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<"" | NewsCategory>("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,6 +109,9 @@ function NewsPage() {
       apiFetch<NewsItem[]>("/news", { auth: false, query: { category: category || undefined } }),
   });
   const list = q.data?.data ?? [];
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = list.slice((page - 1) * limit, page * limit);
 
   const saveMutation = useMutation({
     mutationFn: (payload: { id?: string; body: Record<string, unknown> }) =>
@@ -203,7 +217,10 @@ function NewsPage() {
         {CATS.map((c) => (
           <button
             key={c.value}
-            onClick={() => setCategory(c.value)}
+            onClick={() => {
+              setCategory(c.value);
+              void navigate({ search: (prev: any) => ({ ...prev, page: 1 }) });
+            }}
             className={`h-9 rounded-full px-4 text-sm font-medium transition ${
               category === c.value
                 ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
@@ -228,11 +245,11 @@ function NewsPage() {
                   <TableHead>Danh mục</TableHead>
                   <TableHead>Tóm tắt</TableHead>
                   <TableHead>Ngày đăng</TableHead>
-                  <TableHead>Hành động</TableHead>
+                  <TableHead className="text-right">Hành động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((n) => {
+                {paginatedList.map((n) => {
                   return (
                     <TableRow key={n.id} className="hover:bg-muted/30">
                       <TableCell>
@@ -267,8 +284,8 @@ function NewsPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDateShort(n.publishedAt ?? n.createdAt)}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <Button size="sm" variant="outline" onClick={() => openEdit(n)}>
                             Sửa
                           </Button>
@@ -287,6 +304,18 @@ function NewsPage() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </div>
       )}
 

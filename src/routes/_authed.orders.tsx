@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Search, X, Eye, Package, CreditCard, Calendar, MessageSquare } from "lucide-react";
+import { TablePagination } from "@/components/table-pagination";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   Dialog,
@@ -36,12 +37,14 @@ const ordersSearchSchema = z.object({
   status: fallback(z.enum(STATUS_VALUES), "").default(""),
   q: fallback(z.string(), "").default(""),
   page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
 
 type OrdersSearch = {
   status: (typeof STATUS_VALUES)[number];
   q: string;
   page: number;
+  limit: number;
 };
 
 type OrderRow = {
@@ -93,30 +96,29 @@ const STATUS_TONE: Record<string, string> = {
   returned: "bg-gray-200 text-gray-700",
 };
 
-const REQUEST_LIMIT = 15;
 const EMPTY_ORDERS: OrderRow[] = [];
 
 function OrdersPage() {
-  const { status, q, page } = Route.useSearch();
+  const { status, q, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderRow | null>(null);
 
   const query = useQuery({
-    queryKey: ["orders-admin", { status, page }],
+    queryKey: ["orders-admin", { status, page, limit }],
     queryFn: () =>
       apiFetch<OrderRow[]>("/orders/admin/all", {
         query: {
           status: status || undefined,
           page,
-          limit: REQUEST_LIMIT,
+          limit,
         },
       }),
   });
   const pageOrders = query.data?.data ?? EMPTY_ORDERS;
   const responsePage = Number(query.data?.meta?.page ?? page);
-  const responseLimit = Number(query.data?.meta?.limit ?? REQUEST_LIMIT);
+  const responseLimit = Number(query.data?.meta?.limit ?? limit);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -244,14 +246,14 @@ function OrdersPage() {
                     <TableHead className="text-right">Tổng</TableHead>
                     <TableHead>Thanh toán</TableHead>
                     <TableHead>Ngày tạo</TableHead>
-                    <TableHead>Hành động</TableHead>
+                    <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {list.map((o) => (
                     <TableRow key={o.id} className="hover:bg-muted/30">
-                      <td className="font-mono font-semibold text-sm">{o.code ?? o.id}</td>
-                      <td>
+                      <TableCell className="font-mono font-semibold text-sm">{o.code ?? o.id}</TableCell>
+                      <TableCell>
                         <span
                           className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
                             STATUS_TONE[o.status] ?? "bg-muted"
@@ -259,17 +261,17 @@ function OrdersPage() {
                         >
                           {STATUS_LABEL[o.status] ?? o.status}
                         </span>
-                      </td>
-                      <td className="text-muted-foreground text-sm">
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
                         {o.items?.length ?? o.products?.length ?? 0} món
-                      </td>
-                      <td className="text-right font-bold text-primary">
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">
                         {formatVnd(o.total)}
-                      </td>
-                      <td>{o.payMethod ?? "—"}</td>
-                      <td className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
-                      <td>
-                        <div className="flex items-center gap-2">
+                      </TableCell>
+                      <TableCell>{o.payMethod ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
                           <select
                             value={o.status ?? ""}
                             disabled={statusMutation.isPending && pendingOrderId === o.id}
@@ -294,14 +296,25 @@ function OrdersPage() {
                             Xem
                           </Button>
                         </div>
-                      </td>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
           </div>
-          <OrdersPagination page={safePage} totalPages={totalPages} />
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </>
       )}
 
@@ -434,58 +447,4 @@ function OrdersPage() {
   );
 }
 
-function OrdersPagination({ page, totalPages }: { page: number; totalPages: number }) {
-  if (totalPages <= 1) return null;
-  const window = 2;
-  const pages: (number | "…")[] = [];
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= page - window && i <= page + window)) {
-      pages.push(i);
-    } else if (pages[pages.length - 1] !== "…") {
-      pages.push("…");
-    }
-  }
-  return (
-    <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
-      <Link
-        from={Route.fullPath}
-        search={(prev: OrdersSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
-        aria-disabled={page === 1}
-      >
-        Trước
-      </Link>
-      {pages.map((p, i) =>
-        p === "…" ? (
-          <span key={`e${i}`} className="px-2 text-muted-foreground">
-            …
-          </span>
-        ) : (
-          <Link
-            key={p}
-            from={Route.fullPath}
-            search={(prev: OrdersSearch) => ({ ...prev, page: p })}
-            className={`h-9 min-w-9 px-3 rounded-lg text-sm font-medium grid place-items-center ${
-              p === page
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
-                : "border border-input bg-card hover:bg-muted"
-            }`}
-          >
-            {p}
-          </Link>
-        ),
-      )}
-      <Link
-        from={Route.fullPath}
-        search={(prev: OrdersSearch) => ({
-          ...prev,
-          page: Math.min(totalPages, page + 1),
-        })}
-        className="h-9 px-3 rounded-lg border border-input bg-card text-sm font-medium hover:bg-muted aria-disabled:opacity-50 aria-disabled:pointer-events-none"
-        aria-disabled={page >= totalPages}
-      >
-        Sau
-      </Link>
-    </div>
-  );
-}
+// Removed duplicate local pagination

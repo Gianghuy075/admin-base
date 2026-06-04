@@ -761,6 +761,14 @@ export const db = {
         validOnlineOrders.reduce((sum, o) => sum + (o.total || 0), 0) +
         validPosOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
+      const posCount = validPosOrders.length;
+      const onlineCount = validOnlineOrders.length;
+      const posSales = validPosOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const onlineSales = validOnlineOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+
+      const reportData = db.revenue.report("", "", "all");
+      const summary = reportData.summary;
+
       // Recent Orders (last 8)
       const allMergedOrders: any[] = [];
       onlineOrders.forEach((o) => {
@@ -877,6 +885,11 @@ export const db = {
         ordersByStatus,
         revenueByDay,
         topProducts,
+        posCount,
+        onlineCount,
+        posSales,
+        onlineSales,
+        summary,
       };
     },
   },

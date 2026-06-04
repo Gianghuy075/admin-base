@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search, X, Package, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -7,6 +7,9 @@ import { PageHeader, DataState } from "@/components/page-header";
 import { formatVnd } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 
 type CategoryItem = {
   id: string;
@@ -21,15 +24,23 @@ type ProductItem = {
   categoryId?: string | null;
 };
 
+const inventorySearchSchema = z.object({
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+  search: fallback(z.string(), "").default(""),
+  categoryId: fallback(z.string(), "").default(""),
+  statusFilter: fallback(z.enum(["all", "out", "low", "in"]), "all").default("all"),
+});
+
 export const Route = createFileRoute("/_authed/inventory")({
   head: () => ({ meta: [{ title: "Tồn kho — HappyMall Admin" }] }),
+  validateSearch: zodValidator(inventorySearchSchema),
   component: InventoryPage,
 });
 
 function InventoryPage() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "out" | "low" | "in">("all");
-  const [categoryId, setCategoryId] = useState("");
+  const { page, limit, search, categoryId, statusFilter } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const productsQuery = useQuery({
     queryKey: ["products-inventory"],
@@ -92,6 +103,10 @@ function InventoryPage() {
     return { outOfStock, lowStock, inStock, totalItems };
   }, [list]);
 
+  const total = filteredList.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = filteredList.slice((page - 1) * limit, page * limit);
+
   return (
     <div>
       <PageHeader
@@ -101,7 +116,7 @@ function InventoryPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4 border border-border/55">
           <div className="size-12 rounded-xl grid place-items-center bg-primary/10 text-primary">
             <Package className="size-6" />
           </div>
@@ -111,7 +126,7 @@ function InventoryPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4 border border-border/55">
           <div className="size-12 rounded-xl grid place-items-center bg-emerald-100 text-emerald-700">
             <CheckCircle className="size-6" />
           </div>
@@ -121,7 +136,7 @@ function InventoryPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4 border border-border/55">
           <div className="size-12 rounded-xl grid place-items-center bg-amber-100 text-amber-700">
             <AlertTriangle className="size-6" />
           </div>
@@ -131,7 +146,7 @@ function InventoryPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-5 flex items-center gap-4 border border-border/55">
           <div className="size-12 rounded-xl grid place-items-center bg-rose-100 text-rose-700">
             <XCircle className="size-6" />
           </div>
@@ -148,14 +163,22 @@ function InventoryPage() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, search: e.target.value, page: 1 }),
+              })
+            }
             placeholder="Tìm sản phẩm theo tên..."
             className="h-11 rounded-lg bg-card pl-9"
           />
         </div>
         <select
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={(e) =>
+            navigate({
+              search: (prev: any) => ({ ...prev, categoryId: e.target.value, page: 1 }),
+            })
+          }
           className="h-11 min-w-[180px] rounded-lg border border-input bg-card px-3 text-sm"
         >
           <option value="">Tất cả danh mục</option>
@@ -167,7 +190,11 @@ function InventoryPage() {
         </select>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
+          onChange={(e) =>
+            navigate({
+              search: (prev: any) => ({ ...prev, statusFilter: e.target.value as any, page: 1 }),
+            })
+          }
           className="h-11 min-w-[180px] rounded-lg border border-input bg-card px-3 text-sm"
         >
           <option value="all">Tất cả trạng thái kho</option>
@@ -178,9 +205,9 @@ function InventoryPage() {
         {hasFilter ? (
           <button
             onClick={() => {
-              setSearch("");
-              setCategoryId("");
-              setStatusFilter("all");
+              navigate({
+                search: { search: "", categoryId: "", statusFilter: "all", page: 1 },
+              });
             }}
             className="inline-flex h-11 items-center gap-1 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted"
           >
@@ -198,58 +225,76 @@ function InventoryPage() {
         />
       ) : (
         <div className="overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mã sản phẩm</TableHead>
-                <TableHead>Tên sản phẩm</TableHead>
-                <TableHead>Danh mục</TableHead>
-                <TableHead className="text-right">Đơn giá</TableHead>
-                <TableHead className="text-center">Số lượng tồn</TableHead>
-                <TableHead>Trạng thái</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredList.map((p) => {
-                const stock = p.stock ?? 0;
-                let statusBadge = (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
-                    Còn hàng
-                  </span>
-                );
-                let stockTextClass = "text-foreground font-semibold";
-
-                if (stock <= 0) {
-                  statusBadge = (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700">
-                      Hết hàng
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã sản phẩm</TableHead>
+                  <TableHead>Tên sản phẩm</TableHead>
+                  <TableHead>Danh mục</TableHead>
+                  <TableHead className="text-right">Đơn giá</TableHead>
+                  <TableHead className="text-right">Số lượng tồn</TableHead>
+                  <TableHead className="text-right">Trạng thái</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedList.map((p) => {
+                  const stock = p.stock ?? 0;
+                  let statusBadge = (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
+                      Còn hàng
                     </span>
                   );
-                  stockTextClass = "text-rose-600 font-bold";
-                } else if (stock < 10) {
-                  statusBadge = (
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700">
-                      Sắp hết hàng
-                    </span>
+                  let stockTextClass = "text-foreground font-semibold";
+
+                  if (stock <= 0) {
+                    statusBadge = (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700">
+                        Hết hàng
+                      </span>
+                    );
+                    stockTextClass = "text-rose-600 font-bold";
+                  } else if (stock < 10) {
+                    statusBadge = (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700">
+                        Sắp hết hàng
+                      </span>
+                    );
+                    stockTextClass = "text-amber-600 font-bold";
+                  }
+
+                  const catName = categoriesList.find((c) => c.id === p.categoryId)?.name ?? "—";
+
+                  return (
+                    <TableRow key={p.id} className="hover:bg-muted/30">
+                      <TableCell className="font-mono text-xs text-muted-foreground">{p.id}</TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>{catName}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatVnd(p.price)}</TableCell>
+                      <TableCell className={`text-right ${stockTextClass}`}>{stock}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          {statusBadge}
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   );
-                  stockTextClass = "text-amber-600 font-bold";
-                }
-
-                const catName = categoriesList.find((c) => c.id === p.categoryId)?.name ?? "—";
-
-                return (
-                  <TableRow key={p.id} className="hover:bg-muted/30">
-                    <td className="font-mono text-xs text-muted-foreground">{p.id}</td>
-                    <td className="font-medium">{p.name}</td>
-                    <td>{catName}</td>
-                    <td className="text-right font-semibold">{formatVnd(p.price)}</td>
-                    <td className={`text-center ${stockTextClass}`}>{stock}</td>
-                    <td>{statusBadge}</td>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </div>
       )}
     </div>

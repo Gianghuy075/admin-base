@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 import { Gift, Plus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -87,12 +90,23 @@ const TYPE_LABEL: Record<PrizeType, string> = {
 const EMPTY_PRIZES: WheelPrize[] = [];
 const EMPTY_HISTORY: WheelHistoryItem[] = [];
 
+const wheelSearchSchema = z.object({
+  tab: fallback(z.enum(["prizes", "history"]), "prizes").default("prizes"),
+  prizePage: fallback(z.number().int().min(1), 1).default(1),
+  prizeLimit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+  historyPage: fallback(z.number().int().min(1), 1).default(1),
+  historyLimit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+});
+
 export const Route = createFileRoute("/_authed/wheel")({
   head: () => ({ meta: [{ title: "Vòng quay — HappyMall Admin" }] }),
+  validateSearch: zodValidator(wheelSearchSchema),
   component: WheelPage,
 });
 
 function WheelPage() {
+  const { tab, prizePage, prizeLimit, historyPage, historyLimit } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<WheelPrize | null>(null);
@@ -126,6 +140,14 @@ function WheelPage() {
         .reduce((sum, item) => sum + Number(item.probability ?? 0), 0),
     [list],
   );
+
+  const prizeTotal = list.length;
+  const prizeTotalPages = Math.max(1, Math.ceil(prizeTotal / prizeLimit));
+  const paginatedPrizes = list.slice((prizePage - 1) * prizeLimit, prizePage * prizeLimit);
+
+  const historyTotal = historyList.length;
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / historyLimit));
+  const paginatedHistory = historyList.slice((historyPage - 1) * historyLimit, historyPage * historyLimit);
 
   const saveMutation = useMutation({
     mutationFn: (payload: { id?: string; body: Record<string, unknown> }) =>
@@ -263,7 +285,13 @@ function WheelPage() {
         subtitle={`${list.length} phần thưởng (active probability: ${activeProbability.toFixed(2)}%)`}
       />
 
-      <Tabs defaultValue="prizes" className="space-y-4">
+      <Tabs
+        value={tab}
+        onValueChange={(val) =>
+          navigate({ search: (prev: any) => ({ ...prev, tab: val }) })
+        }
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="prizes">Quản lý phần thưởng</TabsTrigger>
           <TabsTrigger value="history">Lịch sử quay</TabsTrigger>
@@ -294,11 +322,11 @@ function WheelPage() {
                       <TableHead>Loại</TableHead>
                       <TableHead className="text-right">Tỷ lệ (Probability)</TableHead>
                       <TableHead>Giá trị thưởng</TableHead>
-                      <TableHead>Hành động</TableHead>
+                      <TableHead className="text-right">Hành động</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {list.map((p) => {
+                    {paginatedPrizes.map((p) => {
                       const valueStr = p.value == null ? "—" : p.value;
                       const rewardDetail = p.type === "voucher" ? `Voucher: ${p.voucherId || "—"}` : valueStr;
 
@@ -317,8 +345,8 @@ function WheelPage() {
                             {Number(p.probability ?? 0).toFixed(2)}%
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{rewardDetail}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-3">
                               <div className="flex items-center gap-1">
                                 <Switch
                                   checked={p.isActive ?? true}
@@ -326,7 +354,7 @@ function WheelPage() {
                                     toggleMutation.mutate({ id: p.id, isActive: checked })
                                   }
                                 />
-                                <span className="text-xs text-muted-foreground w-12">
+                                <span className="text-xs text-muted-foreground w-12 text-left">
                                   {p.isActive ?? true ? "Bật" : "Tắt"}
                                 </span>
                               </div>
@@ -344,11 +372,24 @@ function WheelPage() {
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination
+                page={prizePage}
+                totalPages={prizeTotalPages}
+                limit={prizeLimit}
+                total={prizeTotal}
+                onLimitChange={(newLimit) =>
+                  navigate({
+                    search: (prev: any) => ({ ...prev, prizeLimit: newLimit, prizePage: 1 }),
+                  })
+                }
+                fromRoute={Route.fullPath}
+                searchKey="prizePage"
+              />
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="history">
+        <TabsContent value="history" className="space-y-4">
           {history.isLoading || history.isError || historyList.length === 0 ? (
             <DataState
               loading={history.isLoading}
@@ -357,25 +398,42 @@ function WheelPage() {
               emptyText="Chưa có lượt quay"
             />
           ) : (
-            <div className="overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-3 text-left">Phần thưởng</th>
-                    <th className="px-6 py-3 text-left">Thời gian</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historyList.map((h) => (
-                    <tr key={h.id} className="border-t border-border">
-                      <td className="px-6 py-3 font-medium">
-                        {h.prize?.name ?? h.prize?.label ?? h.prizeName ?? "—"}
-                      </td>
-                      <td className="px-6 py-3 text-muted-foreground">{formatDate(h.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Phần thưởng</TableHead>
+                      <TableHead className="text-right">Thời gian</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedHistory.map((h) => (
+                      <TableRow key={h.id} className="hover:bg-muted/30">
+                        <TableCell className="font-semibold text-sm">
+                          {h.prize?.name ?? h.prize?.label ?? h.prizeName ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground text-xs">
+                          {formatDate(h.createdAt)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination
+                page={historyPage}
+                totalPages={historyTotalPages}
+                limit={historyLimit}
+                total={historyTotal}
+                onLimitChange={(newLimit) =>
+                  navigate({
+                    search: (prev: any) => ({ ...prev, historyLimit: newLimit, historyPage: 1 }),
+                  })
+                }
+                fromRoute={Route.fullPath}
+                searchKey="historyPage"
+              />
             </div>
           )}
         </TabsContent>

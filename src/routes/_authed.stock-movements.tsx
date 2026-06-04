@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, X, Plus, ClipboardList, Package, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { formatDate, formatVnd } from "@/lib/format";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 
 type StockMovement = {
   id: string;
@@ -47,8 +50,16 @@ const defaultForm: MovementFormState = {
   price: "",
 };
 
+const stockMovementsSearchSchema = z.object({
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+  search: fallback(z.string(), "").default(""),
+  typeFilter: fallback(z.enum(["all", "in", "out"]), "all").default("all"),
+});
+
 export const Route = createFileRoute("/_authed/stock-movements")({
   head: () => ({ meta: [{ title: "Xuất nhập kho — HappyMall Admin" }] }),
+  validateSearch: zodValidator(stockMovementsSearchSchema),
   component: StockMovementsPage,
 });
 
@@ -59,8 +70,9 @@ const TYPE_LABEL: Record<StockMovement["type"], string> = {
 
 function StockMovementsPage() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | StockMovement["type"]>("all");
+  const { page, limit, search, typeFilter } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingType, setPendingType] = useState<StockMovement["type"] | null>(null);
   const [form, setForm] = useState<MovementFormState>(defaultForm);
@@ -151,7 +163,7 @@ function StockMovementsPage() {
     if (!form.productId) return "Vui lòng chọn một sản phẩm";
     
     const qty = Number(form.quantity);
-    if (!Number.isInteger(qty) || qty <= 0) return "Số lượng phải là số nguyên dương lớn hơn 0";
+    if (!Number.isInteger(qty) || qty <= 0) return "Số lượng phải là số nguyên duy nhất lớn hơn 0";
 
     if (pendingType === "out") {
       const prod = productsList.find((p) => p.id === form.productId);
@@ -185,6 +197,10 @@ function StockMovementsPage() {
     });
   }
 
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = filtered.slice((page - 1) * limit, page * limit);
+
   return (
     <div>
       <PageHeader
@@ -204,7 +220,7 @@ function StockMovementsPage() {
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3 border border-border/55">
           <div className="size-10 rounded-lg grid place-items-center bg-primary/10 text-primary">
             <ClipboardList className="size-5" />
           </div>
@@ -214,7 +230,7 @@ function StockMovementsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3 border border-border/55">
           <div className="size-10 rounded-lg grid place-items-center bg-emerald-100 text-emerald-700">
             <ArrowDownLeft className="size-5" />
           </div>
@@ -226,7 +242,7 @@ function StockMovementsPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3">
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] p-4 flex items-center gap-3 border border-border/55">
           <div className="size-10 rounded-lg grid place-items-center bg-rose-100 text-rose-700">
             <ArrowUpRight className="size-5" />
           </div>
@@ -244,14 +260,22 @@ function StockMovementsPage() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, search: event.target.value, page: 1 }),
+              })
+            }
             placeholder="Tìm theo mã đơn, người tạo hoặc tên sản phẩm..."
             className="h-11 rounded-lg bg-card pl-9"
           />
         </div>
         <select
           value={typeFilter}
-          onChange={(event) => setTypeFilter(event.target.value as "all" | StockMovement["type"])}
+          onChange={(event) =>
+            navigate({
+              search: (prev: any) => ({ ...prev, typeFilter: event.target.value as any, page: 1 }),
+            })
+          }
           className="h-11 min-w-[200px] rounded-lg border border-input bg-card px-3 text-sm"
         >
           <option value="all">Tất cả loại giao dịch</option>
@@ -261,8 +285,9 @@ function StockMovementsPage() {
         {hasFilter ? (
           <button
             onClick={() => {
-              setSearch("");
-              setTypeFilter("all");
+              navigate({
+                search: { search: "", typeFilter: "all", page: 1 },
+              });
             }}
             className="inline-flex h-11 items-center gap-1 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted"
           >
@@ -280,52 +305,68 @@ function StockMovementsPage() {
         />
       ) : (
         <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mã đơn xuất-nhập</TableHead>
-                <TableHead>Loại giao dịch</TableHead>
-                <TableHead>Sản phẩm & Chi tiết</TableHead>
-                <TableHead className="text-right">Đơn giá</TableHead>
-                <TableHead className="text-right">Tổng giá trị</TableHead>
-                <TableHead>Người tạo lệnh</TableHead>
-                <TableHead>Thời gian</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((movement) => {
-                const isEntry = movement.type === "in";
-                const typeBadge = isEntry ? (
-                  <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
-                    <ArrowDownLeft className="size-3" /> Nhập kho
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700">
-                    <ArrowUpRight className="size-3" /> Xuất kho
-                  </span>
-                );
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã đơn xuất-nhập</TableHead>
+                  <TableHead>Loại giao dịch</TableHead>
+                  <TableHead>Sản phẩm & Chi tiết</TableHead>
+                  <TableHead className="text-right">Đơn giá</TableHead>
+                  <TableHead className="text-right">Tổng giá trị</TableHead>
+                  <TableHead>Người tạo lệnh</TableHead>
+                  <TableHead className="text-right">Thời gian</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedList.map((movement) => {
+                  const isEntry = movement.type === "in";
+                  const typeBadge = isEntry ? (
+                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">
+                      <ArrowDownLeft className="size-3" /> Nhập kho
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold bg-rose-100 text-rose-700">
+                      <ArrowUpRight className="size-3" /> Xuất kho
+                    </span>
+                  );
 
-                return (
-                  <TableRow key={movement.id} className="hover:bg-muted/30">
-                    <td className="font-mono font-semibold text-xs">{movement.code}</td>
-                    <td>{typeBadge}</td>
-                    <td className="font-medium text-foreground text-sm flex items-center gap-1.5">
-                      <Package className="size-3.5 text-muted-foreground shrink-0" />
-                      {movement.details || "—"}
-                    </td>
-                    <td className="text-right text-muted-foreground font-medium">
-                      {movement.price ? formatVnd(movement.price) : "—"}
-                    </td>
-                    <td className="text-right font-bold text-foreground">
-                      {movement.totalValue ? formatVnd(movement.totalValue) : "—"}
-                    </td>
-                    <td>{movement.createdBy}</td>
-                    <td className="text-muted-foreground text-xs">{formatDate(movement.createdAt)}</td>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                  return (
+                    <TableRow key={movement.id} className="hover:bg-muted/30">
+                      <TableCell className="font-mono font-semibold text-xs">{movement.code}</TableCell>
+                      <TableCell>{typeBadge}</TableCell>
+                      <TableCell className="font-medium text-foreground text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Package className="size-3.5 text-muted-foreground shrink-0" />
+                          {movement.details || "—"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground font-medium">
+                        {movement.price ? formatVnd(movement.price) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-foreground">
+                        {movement.totalValue ? formatVnd(movement.totalValue) : "—"}
+                      </TableCell>
+                      <TableCell>{movement.createdBy}</TableCell>
+                      <TableCell className="text-right text-muted-foreground text-xs">{formatDate(movement.createdAt)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </div>
       )}
 

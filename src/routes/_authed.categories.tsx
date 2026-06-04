@@ -5,6 +5,7 @@ import { Plus, Tag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
+import { TablePagination } from "@/components/table-pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,8 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
 
 type CategoryItem = {
   id: string;
@@ -92,12 +94,25 @@ const PASTELS = [
   "bg-teal-100 text-teal-700",
 ];
 
+const categoriesSearchSchema = z.object({
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
+});
+
+type CategoriesSearch = {
+  page: number;
+  limit: number;
+};
+
 export const Route = createFileRoute("/_authed/categories")({
-  head: () => ({ meta: [{ title: "Danh mục — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Danh mục — HTMAdmin" }] }),
+  validateSearch: zodValidator(categoriesSearchSchema),
   component: CategoriesPage,
 });
 
 function CategoriesPage() {
+  const { page, limit } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CategoryItem | null>(null);
@@ -111,6 +126,9 @@ function CategoriesPage() {
     queryFn: () => apiFetch<CategoryItem[]>("/categories", { auth: false }),
   });
   const list = q.data?.data ?? [];
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = list.slice((page - 1) * limit, page * limit);
 
   const saveMutation = useMutation({
     mutationFn: (payload: { id?: string; body: Record<string, unknown> }) =>
@@ -203,7 +221,7 @@ function CategoriesPage() {
     <div>
       <PageHeader
         title="Danh mục"
-        subtitle={`${list.length} danh mục`}
+        subtitle={`${total} danh mục`}
         action={
           <Button onClick={openCreate}>
             <Plus className="size-4" />
@@ -220,22 +238,23 @@ function CategoriesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-24">Ảnh / Icon</TableHead>
+                  <TableHead className="w-20">Ảnh / Icon</TableHead>
                   <TableHead>Tên danh mục</TableHead>
                   <TableHead>Slug</TableHead>
                   <TableHead>Mô tả</TableHead>
-                  <TableHead className="text-center">Số sản phẩm</TableHead>
-                  <TableHead>Hành động</TableHead>
+                  <TableHead className="text-right">Số sản phẩm</TableHead>
+                  <TableHead className="text-right">Hành động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((c, idx) => {
+                {paginatedList.map((c, idx) => {
                   const products = getProductCount(c);
+                  const listIdx = (page - 1) * limit + idx;
                   return (
                     <TableRow key={c.id} className="hover:bg-muted/30">
                       <TableCell>
                         <div
-                          className={`grid size-10 place-items-center rounded-xl ${PASTELS[idx % PASTELS.length]}`}
+                          className={`grid size-10 place-items-center rounded-xl ${PASTELS[listIdx % PASTELS.length]}`}
                         >
                           {c.icon || c.image ? (
                             <img
@@ -253,9 +272,9 @@ function CategoriesPage() {
                       <TableCell className="max-w-xs truncate text-muted-foreground text-xs">
                         {c.description ?? "Không có mô tả"}
                       </TableCell>
-                      <TableCell className="text-center font-bold text-sm">{products}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
+                      <TableCell className="text-right font-bold text-sm text-foreground">{products}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
                           <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
                             Sửa
                           </Button>
@@ -275,6 +294,18 @@ function CategoriesPage() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </div>
       )}
 

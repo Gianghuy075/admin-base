@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { z } from "zod";
+import { TablePagination } from "@/components/table-pagination";
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
@@ -23,6 +24,8 @@ const revenueSearchSchema = z.object({
   startDate: fallback(z.string(), "").default(""),
   endDate: fallback(z.string(), "").default(""),
   channel: fallback(z.string(), "all").default("all"),
+  page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
 
 export const Route = createFileRoute("/_authed/revenue-report")({
@@ -102,7 +105,7 @@ function RevenueCard({
 }
 
 function RevenueReportPage() {
-  const { startDate, endDate, channel } = Route.useSearch();
+  const { startDate, endDate, channel, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
 
   const [localStart, setLocalStart] = useState(startDate);
@@ -130,15 +133,19 @@ function RevenueReportPage() {
     actualProfit: 0,
   };
   const list = report?.transactions ?? [];
+  const total = list.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const paginatedList = list.slice((page - 1) * limit, page * limit);
 
   function handleFilterSubmit(e: React.FormEvent) {
     e.preventDefault();
     navigate({
-      search: (prev) => ({
+      search: (prev: any) => ({
         ...prev,
         startDate: localStart,
         endDate: localEnd,
         channel: localChannel,
+        page: 1,
       }),
     });
   }
@@ -152,6 +159,8 @@ function RevenueReportPage() {
         startDate: "",
         endDate: "",
         channel: "all",
+        page: 1,
+        limit,
       },
     });
   }
@@ -351,31 +360,43 @@ function RevenueReportPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {list.map((t) => (
+                  {paginatedList.map((t) => (
                     <TableRow key={t.id} className="hover:bg-muted/30 transition-colors text-xs">
-                      <td className="font-mono font-semibold">{t.code}</td>
-                      <td>
+                      <TableCell className="font-mono font-semibold">{t.code}</TableCell>
+                      <TableCell>
                         <span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-semibold ${t.channel === "POS" ? "bg-emerald-50 text-emerald-700 border border-emerald-200/50" : "bg-blue-50 text-blue-700 border border-blue-200/50"}`}>
                           {t.channel === "POS" ? "Tại quầy" : "Online"}
                         </span>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="font-semibold text-foreground">{t.customerName}</div>
                         <div className="text-[10px] text-muted-foreground">{t.customerPhone || "—"}</div>
-                      </td>
-                      <td className="text-right font-medium text-foreground">{formatVnd(t.total)}</td>
-                      <td className="text-right text-muted-foreground">{formatVnd(t.vat)}</td>
-                      <td className="text-right font-medium text-foreground">{formatVnd(t.netSales)}</td>
-                      <td className="text-right text-muted-foreground">{formatVnd(t.cogs)}</td>
-                      <td className={`text-right font-bold ${t.actualRevenue >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-foreground">{formatVnd(t.total)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatVnd(t.vat)}</TableCell>
+                      <TableCell className="text-right font-medium text-foreground">{formatVnd(t.netSales)}</TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatVnd(t.cogs)}</TableCell>
+                      <TableCell className={`text-right font-bold ${t.actualRevenue >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                         {formatVnd(t.actualRevenue)}
-                      </td>
-                      <td className="text-right text-muted-foreground">{formatDate(t.createdAt)}</td>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">{formatDate(t.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
+            <TablePagination
+              page={page}
+              totalPages={totalPages}
+              limit={limit}
+              total={total}
+              onLimitChange={(newLimit) =>
+                navigate({
+                  search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+                })
+              }
+              fromRoute={Route.fullPath}
+            />
           </div>
         )}
       </div>

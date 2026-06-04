@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { PageHeader, DataState } from "@/components/page-header";
+import { TablePagination } from "@/components/table-pagination";
 import { formatVnd } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ const productsSearchSchema = z.object({
   search: fallback(z.string(), "").default(""),
   categoryId: fallback(z.string(), "").default(""),
   page: fallback(z.number().int().min(1), 1).default(1),
+  limit: fallback(z.union([z.literal(10), z.literal(20)]), 10).default(10),
 });
 
 const defaultForm: ProductFormState = {
@@ -100,10 +102,9 @@ export const Route = createFileRoute("/_authed/products")({
 });
 
 function ProductsPage() {
-  const { search, categoryId, page } = Route.useSearch();
+  const { search, categoryId, page, limit } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
-  const limit = 20;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductItem | null>(null);
@@ -121,7 +122,7 @@ function ProductsPage() {
   });
 
   const products = useQuery({
-    queryKey: ["products", { search, categoryId, page }],
+    queryKey: ["products", { search, categoryId, page, limit }],
     queryFn: () =>
       apiFetch<ProductItem[]>("/products", {
         auth: false,
@@ -369,30 +370,30 @@ function ProductsPage() {
                 <TableRow>
                   <TableHead>Tên sản phẩm</TableHead>
                   <TableHead>Danh mục</TableHead>
-                  <TableHead>Còn hàng</TableHead>
-                  <TableHead>Giá nhập</TableHead>
-                  <TableHead>Giá bán</TableHead>
-                  <TableHead>Thuế VAT</TableHead>
-                  <TableHead>Action</TableHead>
+                  <TableHead className="text-right">Còn hàng</TableHead>
+                  <TableHead className="text-right">Giá nhập</TableHead>
+                  <TableHead className="text-right">Giá bán</TableHead>
+                  <TableHead className="text-right">Thuế VAT</TableHead>
+                  <TableHead className="text-right">Hành động</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {list.map((p) => (
-                  <TableRow key={p.id}>
+                  <TableRow key={p.id} className="hover:bg-muted/30">
                     <TableCell className="font-medium">{p.name}</TableCell>
                     <TableCell>
                       {categories.data?.data?.find((c) => c.id === p.categoryId)?.name ?? "—"}
                     </TableCell>
-                    <TableCell>{p.stock ?? 0}</TableCell>
-                    <TableCell className="text-muted-foreground font-medium">
+                    <TableCell className="text-right font-semibold text-foreground">{p.stock ?? 0}</TableCell>
+                    <TableCell className="text-right text-muted-foreground font-medium">
                       {p.importPrice ? formatVnd(p.importPrice) : "—"}
                     </TableCell>
-                    <TableCell className="font-bold text-foreground">{formatVnd(p.price)}</TableCell>
-                    <TableCell className="font-medium text-amber-600 dark:text-amber-400">
+                    <TableCell className="text-right font-bold text-foreground">{formatVnd(p.price)}</TableCell>
+                    <TableCell className="text-right font-medium text-amber-600 dark:text-amber-400">
                       {p.taxRate ?? 10}%
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+                    <TableCell className="text-right">
+                      <div className="flex gap-2 justify-end">
                         <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
                           Sửa
                         </Button>
@@ -407,7 +408,18 @@ function ProductsPage() {
             </Table>
           </div>
 
-          <Pagination page={page} totalPages={totalPages} />
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            limit={limit}
+            total={total}
+            onLimitChange={(newLimit) =>
+              navigate({
+                search: (prev: any) => ({ ...prev, limit: newLimit, page: 1 }),
+              })
+            }
+            fromRoute={Route.fullPath}
+          />
         </>
       )}
 
@@ -654,59 +666,6 @@ function ProductsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function Pagination({ page, totalPages }: { page: number; totalPages: number }) {
-  if (totalPages <= 1) return null;
-  const window = 2;
-  const pages: (number | "…")[] = [];
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= page - window && i <= page + window)) {
-      pages.push(i);
-    } else if (pages[pages.length - 1] !== "…") {
-      pages.push("…");
-    }
-  }
-  return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
-      <Link
-        from={Route.fullPath}
-        search={(prev: ProductsSearch) => ({ ...prev, page: Math.max(1, page - 1) })}
-        className="inline-flex h-9 items-center rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        aria-disabled={page === 1}
-      >
-        Trước
-      </Link>
-      {pages.map((p, i) =>
-        p === "…" ? (
-          <span key={`e${i}`} className="px-2 text-muted-foreground">
-            …
-          </span>
-        ) : (
-          <Link
-            key={p}
-            from={Route.fullPath}
-            search={(prev: ProductsSearch) => ({ ...prev, page: p })}
-            className={`grid h-9 min-w-9 place-items-center rounded-lg px-3 text-sm font-medium ${
-              p === page
-                ? "bg-primary text-primary-foreground shadow-[var(--shadow-button)]"
-                : "border border-input bg-card hover:bg-muted"
-            }`}
-          >
-            {p}
-          </Link>
-        ),
-      )}
-      <Link
-        from={Route.fullPath}
-        search={(prev: ProductsSearch) => ({ ...prev, page: Math.min(totalPages, page + 1) })}
-        className="inline-flex h-9 items-center rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        aria-disabled={page >= totalPages}
-      >
-        Sau
-      </Link>
     </div>
   );
 }

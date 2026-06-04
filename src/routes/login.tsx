@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ShoppingBag } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Đăng nhập — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Đăng nhập — HTMAdmin" }] }),
   component: LoginPage,
 });
 
@@ -56,7 +56,7 @@ function LoginPage() {
             <ShoppingBag className="size-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">HappyMall</h1>
+            <h1 className="text-2xl font-bold tracking-tight">HTMAdmin</h1>
             <p className="text-sm text-muted-foreground">Admin dashboard</p>
           </div>
         </div>

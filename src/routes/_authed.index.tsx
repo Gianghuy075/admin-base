@@ -7,7 +7,7 @@ import { RevenueChart, StatusChart, TopProductsChart } from "@/components/dashbo
 import { Package, ShoppingCart, Ticket, Tag, TrendingUp, Users } from "lucide-react";
 
 export const Route = createFileRoute("/_authed/")({
-  head: () => ({ meta: [{ title: "Tổng quan — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Tổng quan — HTMAdmin" }] }),
   component: DashboardPage,
 });
 
@@ -169,9 +169,8 @@ function DashboardPage() {
                     <td className="px-6 py-3 font-medium">{o.id}</td>
                     <td className="px-6 py-3">
                       <span
-                        className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${
-                          STATUS_TONE[o.status] ?? "bg-muted"
-                        }`}
+                        className={`inline-flex px-2 py-1 rounded-md text-xs font-medium ${STATUS_TONE[o.status] ?? "bg-muted"
+                          }`}
                       >
                         {STATUS_LABEL[o.status] ?? o.status}
                       </span>

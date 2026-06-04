@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -217,57 +218,75 @@ function NewsPage() {
       {q.isLoading || q.isError || list.length === 0 ? (
         <DataState loading={q.isLoading} error={q.error} empty={list.length === 0} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((n) => (
-            <article
-              key={n.id}
-              className="flex flex-col overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)] transition hover:shadow-md"
-            >
-              <button className="w-full text-left" onClick={() => openEdit(n)}>
-                <div className="aspect-[16/9] overflow-hidden bg-muted">
-                  {n.coverUrl || n.image || n.thumbnail ? (
-                    <img
-                      src={n.coverUrl ?? n.image ?? n.thumbnail ?? ""}
-                      alt={n.title}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center text-muted-foreground">
-                      <Newspaper className="size-8" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-1 flex-col p-4">
-                  <span className="inline-flex w-fit rounded-md bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
-                    {n.category === "promo"
-                      ? "Khuyến mãi"
-                      : n.category === "knowledge"
-                        ? "Kiến thức"
-                        : n.category}
-                  </span>
-                  <h3 className="mt-2 line-clamp-2 font-semibold">{n.title}</h3>
-                  <p className="mt-1 line-clamp-3 flex-1 text-sm text-muted-foreground">
-                    {n.excerpt ?? n.summary ?? n.description ?? ""}
-                  </p>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    {formatDateShort(n.publishedAt ?? n.createdAt)}
-                  </p>
-                </div>
-              </button>
-              <div className="px-4 pb-4">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="w-full"
-                  onClick={() => setDeleting(n)}
-                >
-                  <Trash2 className="size-4" />
-                  Xóa bài viết
-                </Button>
-              </div>
-            </article>
-          ))}
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-28">Ảnh bìa</TableHead>
+                  <TableHead>Tiêu đề</TableHead>
+                  <TableHead>Danh mục</TableHead>
+                  <TableHead>Tóm tắt</TableHead>
+                  <TableHead>Ngày đăng</TableHead>
+                  <TableHead>Hành động</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((n) => {
+                  return (
+                    <TableRow key={n.id} className="hover:bg-muted/30">
+                      <TableCell>
+                        <div className="size-16 rounded-lg overflow-hidden bg-muted border border-border">
+                          {n.coverUrl || n.image || n.thumbnail ? (
+                            <img
+                              src={n.coverUrl ?? n.image ?? n.thumbnail ?? ""}
+                              alt={n.title}
+                              className="size-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="grid size-full place-items-center text-muted-foreground">
+                              <Newspaper className="size-5" />
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm max-w-xs truncate">{n.title}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">
+                          {n.category === "promo"
+                            ? "Khuyến mãi"
+                            : n.category === "knowledge"
+                              ? "Kiến thức"
+                              : n.category}
+                        </span>
+                      </TableCell>
+                      <TableCell className="max-w-sm truncate text-muted-foreground text-xs">
+                        {n.excerpt ?? n.summary ?? n.description ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDateShort(n.publishedAt ?? n.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(n)}>
+                            Sửa
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setDeleting(n)}
+                          >
+                            Xóa
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 

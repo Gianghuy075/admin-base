@@ -8,7 +8,18 @@ import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
 import { formatVnd, formatDate } from "@/lib/format";
 import { Input } from "@/components/ui/input";
-import { Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Search, X, Eye, Package, CreditCard, Calendar, MessageSquare } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const STATUS_VALUES = [
   "",
@@ -38,11 +49,11 @@ type OrderRow = {
   code?: string;
   payMethod?: string | null;
   note?: string | null;
-  status?: string;
-  items?: unknown[];
-  products?: unknown[];
-  total?: number;
-  createdAt?: string | Date;
+  status: "placed" | "paid" | "shipping" | "delivered" | "unreviewed" | "cancelled" | "returned";
+  items?: any[];
+  products?: any[];
+  total: number;
+  createdAt: string;
 };
 
 export const Route = createFileRoute("/_authed/orders")({
@@ -62,6 +73,16 @@ const STATUSES = [
   { value: "returned", label: "Đã trả" },
 ] as const;
 
+const STATUS_LABEL: Record<string, string> = {
+  placed: "Đã đặt",
+  paid: "Đã thanh toán",
+  shipping: "Đang giao",
+  delivered: "Đã giao",
+  unreviewed: "Chờ đánh giá",
+  cancelled: "Đã hủy",
+  returned: "Đã trả",
+};
+
 const STATUS_TONE: Record<string, string> = {
   placed: "bg-blue-100 text-blue-700",
   paid: "bg-indigo-100 text-indigo-700",
@@ -80,6 +101,7 @@ function OrdersPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const queryClient = useQueryClient();
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<OrderRow | null>(null);
 
   const query = useQuery({
     queryKey: ["orders-admin", { status, page }],
@@ -121,9 +143,15 @@ function OrdersPage() {
     onSuccess: (_, variables) => {
       setPendingOrderId(null);
       void queryClient.invalidateQueries({ queryKey: ["orders-admin"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
       const label =
         STATUSES.find((item) => item.value === variables.nextStatus)?.label ?? variables.nextStatus;
       toast.success(`Đã cập nhật trạng thái thành ${label}`);
+      
+      // Update selected detail status if currently open
+      if (selectedOrderDetail && selectedOrderDetail.id === variables.id) {
+        setSelectedOrderDetail((prev) => prev ? { ...prev, status: variables.nextStatus as any } : null);
+      }
     },
     onError: (error) => {
       setPendingOrderId(null);
@@ -207,30 +235,41 @@ function OrdersPage() {
         <>
           <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
-                  <tr>
-                    <th className="text-left px-6 py-3">Mã đơn</th>
-                    <th className="text-left px-6 py-3">Trạng thái</th>
-                    <th className="text-left px-6 py-3">Sản phẩm</th>
-                    <th className="text-right px-6 py-3">Tổng</th>
-                    <th className="text-left px-6 py-3">Thanh toán</th>
-                    <th className="text-left px-6 py-3">Ngày tạo</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mã đơn</TableHead>
+                    <TableHead>Trạng thái</TableHead>
+                    <TableHead>Sản phẩm</TableHead>
+                    <TableHead className="text-right">Tổng</TableHead>
+                    <TableHead>Thanh toán</TableHead>
+                    <TableHead>Ngày tạo</TableHead>
+                    <TableHead>Hành động</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {list.map((o) => (
-                    <tr key={o.id} className="border-t border-border hover:bg-muted/30">
-                      <td className="px-6 py-3 font-mono font-semibold">{o.code ?? o.id}</td>
-                      <td className="px-6 py-3">
-                        <div className="space-y-1">
-                          <span
-                            className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${
-                              STATUS_TONE[o.status] ?? "bg-muted"
-                            }`}
-                          >
-                            {STATUSES.find((s) => s.value === o.status)?.label ?? o.status}
-                          </span>
+                    <TableRow key={o.id} className="hover:bg-muted/30">
+                      <td className="font-mono font-semibold text-sm">{o.code ?? o.id}</td>
+                      <td>
+                        <span
+                          className={`inline-flex rounded-md px-2 py-1 text-xs font-semibold ${
+                            STATUS_TONE[o.status] ?? "bg-muted"
+                          }`}
+                        >
+                          {STATUS_LABEL[o.status] ?? o.status}
+                        </span>
+                      </td>
+                      <td className="text-muted-foreground text-sm">
+                        {o.items?.length ?? o.products?.length ?? 0} món
+                      </td>
+                      <td className="text-right font-bold text-primary">
+                        {formatVnd(o.total)}
+                      </td>
+                      <td>{o.payMethod ?? "—"}</td>
+                      <td className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
+                      <td>
+                        <div className="flex items-center gap-2">
                           <select
                             value={o.status ?? ""}
                             disabled={statusMutation.isPending && pendingOrderId === o.id}
@@ -240,7 +279,7 @@ function OrdersPage() {
                               setPendingOrderId(o.id);
                               statusMutation.mutate({ id: o.id, nextStatus });
                             }}
-                            className="h-8 min-w-[150px] rounded-md border border-input bg-background px-2 text-xs"
+                            className="h-8 min-w-[140px] rounded-md border border-input bg-background px-2 text-xs"
                           >
                             <option value="" disabled>
                               Chọn trạng thái
@@ -251,25 +290,146 @@ function OrdersPage() {
                               </option>
                             ))}
                           </select>
+                          <Button size="sm" variant="outline" onClick={() => setSelectedOrderDetail(o)}>
+                            Xem
+                          </Button>
                         </div>
                       </td>
-                      <td className="px-6 py-3 text-muted-foreground">
-                        {o.items?.length ?? o.products?.length ?? 0} món
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-primary">
-                        {formatVnd(o.total)}
-                      </td>
-                      <td className="px-6 py-3">{o.payMethod ?? "—"}</td>
-                      <td className="px-6 py-3 text-muted-foreground">{formatDate(o.createdAt)}</td>
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
           <OrdersPagination page={safePage} totalPages={totalPages} />
         </>
       )}
+
+      {/* Online Order Detail Dialog */}
+      <Dialog open={Boolean(selectedOrderDetail)} onOpenChange={(open) => !open && setSelectedOrderDetail(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Chi tiết đơn hàng {selectedOrderDetail?.code ?? selectedOrderDetail?.id}</DialogTitle>
+            <DialogDescription>Giao dịch trực tuyến từ hệ thống website</DialogDescription>
+          </DialogHeader>
+
+          {selectedOrderDetail && (
+            <div className="space-y-4">
+              {/* Order Metadata Row */}
+              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-3 rounded-xl border border-border text-xs">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground font-medium">Ngày đặt hàng</p>
+                    <p className="font-semibold">{formatDate(selectedOrderDetail.createdAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CreditCard className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground font-medium">Hình thức thanh toán</p>
+                    <p className="font-semibold">{selectedOrderDetail.payMethod ?? "COD"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Section */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-card">
+                <div className="space-y-0.5">
+                  <p className="text-xs text-muted-foreground font-medium">Trạng thái hiện tại</p>
+                  <span className={`inline-flex rounded-md px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONE[selectedOrderDetail.status]}`}>
+                    {STATUS_LABEL[selectedOrderDetail.status] ?? selectedOrderDetail.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="detail-status" className="text-xs font-medium">Đổi trạng thái:</Label>
+                  <select
+                    id="detail-status"
+                    value={selectedOrderDetail.status}
+                    disabled={statusMutation.isPending && pendingOrderId === selectedOrderDetail.id}
+                    onChange={(event) => {
+                      const nextStatus = event.target.value;
+                      if (!nextStatus || nextStatus === selectedOrderDetail.status) return;
+                      setPendingOrderId(selectedOrderDetail.id);
+                      statusMutation.mutate({ id: selectedOrderDetail.id, nextStatus });
+                    }}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                  >
+                    {STATUSES.filter((item) => item.value).map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Note Section */}
+              {selectedOrderDetail.note && (
+                <div className="flex gap-2 p-3 rounded-xl bg-amber-50/50 border border-amber-100 text-xs">
+                  <MessageSquare className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-amber-800">Ghi chú từ khách: </span>
+                    <span className="text-amber-700">{selectedOrderDetail.note}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Items List */}
+              <div className="space-y-1.5">
+                <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                  <Package className="size-4 text-muted-foreground" />
+                  Danh sách sản phẩm
+                </h4>
+                <div className="rounded-xl border border-border overflow-hidden bg-muted/10">
+                  <Table>
+                    <TableHeader className="bg-muted/30">
+                      <TableRow>
+                        <TableHead className="text-xs">Sản phẩm</TableHead>
+                        <TableHead className="text-right text-xs">Đơn giá</TableHead>
+                        <TableHead className="text-center text-xs">SL</TableHead>
+                        <TableHead className="text-right text-xs">Thành tiền</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {((selectedOrderDetail.items || selectedOrderDetail.products || [])).map((item: any, idx: number) => (
+                        <TableRow key={idx} className="text-xs hover:bg-muted/10">
+                          <td className="font-medium">{item.name}</td>
+                          <td className="text-right">{formatVnd(item.price)}</td>
+                          <td className="text-center font-semibold">{item.quantity}</td>
+                          <td className="text-right font-bold">{formatVnd(item.price * item.quantity)}</td>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Total Summary */}
+              <div className="bg-muted/30 p-4 rounded-xl border border-border mt-3 space-y-2 text-xs">
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Tạm tính (chưa thuế):</span>
+                  <span>{formatVnd(selectedOrderDetail.total - (selectedOrderDetail.vat || 0))}</span>
+                </div>
+                <div className="flex justify-between items-center text-muted-foreground">
+                  <span>Thuế GTGT (VAT):</span>
+                  <span>{formatVnd(selectedOrderDetail.vat || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center border-t border-border/80 pt-2 font-semibold text-sm">
+                  <span>Tổng cộng thanh toán:</span>
+                  <span className="text-base font-bold text-primary">{formatVnd(selectedOrderDetail.total)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="border-t border-border pt-3">
+            <Button variant="outline" onClick={() => setSelectedOrderDetail(null)}>
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

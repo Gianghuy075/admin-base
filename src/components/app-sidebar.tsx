@@ -42,6 +42,7 @@ const productItems = [
 const orderItems = [
   { title: "Đơn hàng", url: "/pos-orders" },
   { title: "Đơn hàng Online", url: "/orders" },
+  { title: "Báo cáo doanh thu", url: "/revenue-report" },
 ] as const;
 
 const userItems = [

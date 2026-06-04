@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Ticket } from "lucide-react";
+import { Plus, Ticket, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 import { PageHeader, DataState } from "@/components/page-header";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type VoucherItem = {
   id: string;
@@ -70,6 +81,7 @@ function VouchersPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<VoucherItem | null>(null);
+  const [deleting, setDeleting] = useState<VoucherItem | null>(null);
   const [form, setForm] = useState<VoucherFormState>(defaultForm);
   const [formError, setFormError] = useState("");
 
@@ -96,6 +108,37 @@ function VouchersPage() {
     onError: (error) => {
       const message = error instanceof Error ? error.message : "Lưu voucher thất bại";
       setFormError(message);
+      toast.error(message);
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: (payload: { id: string; isActive: boolean }) =>
+      apiFetch(`/vouchers/admin/${payload.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: payload.isActive }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vouchers"] });
+      toast.success("Cập nhật trạng thái thành công");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Cập nhật trạng thái thất bại");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/vouchers/admin/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vouchers"] });
+      toast.success("Xóa voucher thành công");
+      setDeleting(null);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : "Xóa voucher thất bại";
       toast.error(message);
     },
   });
@@ -179,42 +222,82 @@ function VouchersPage() {
       {q.isLoading || q.isError || list.length === 0 ? (
         <DataState loading={q.isLoading} error={q.error} empty={list.length === 0} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {list.map((v) => (
-            <button
-              key={v.id ?? v.code}
-              className="relative flex overflow-hidden rounded-2xl bg-card text-left shadow-[var(--shadow-card)] transition hover:shadow-md"
-              onClick={() => openEdit(v)}
-            >
-              <div className="flex w-28 flex-col items-center justify-center bg-gradient-to-br from-primary to-orange-400 p-4 text-center text-primary-foreground">
-                <Ticket className="mb-1 size-7" />
-                <p className="text-xs font-semibold uppercase tracking-wide opacity-90">
-                  {v.type === "ship" ? "Freeship" : "Giảm giá"}
-                </p>
-              </div>
-              <div className="min-w-0 flex-1 p-4">
-                <p className="font-mono text-base font-bold text-secondary-foreground">
-                  {v.id ?? v.code}
-                </p>
-                <p className="mt-1 line-clamp-2 text-sm text-foreground">
-                  {v.description ?? v.title ?? "—"}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  {v.expiryDate ? <span>HSD: {formatDateShort(v.expiryDate)}</span> : null}
-                  {v.totalLimit != null ? <span>Còn: {v.remaining ?? v.totalLimit}</span> : null}
-                  {v.minOrder != null && Number(v.minOrder) > 0 ? (
-                    <span>Đơn từ {Number(v.minOrder).toLocaleString("vi-VN")}₫</span>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-xs font-medium text-muted-foreground">
-                  {v.isActive ? "Đang hoạt động" : "Đã tắt"}
-                </p>
-              </div>
-            </button>
-          ))}
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã voucher</TableHead>
+                  <TableHead>Loại</TableHead>
+                  <TableHead>Tiêu đề & Mô tả</TableHead>
+                  <TableHead className="text-right">Giá trị</TableHead>
+                  <TableHead className="text-right">Đơn tối thiểu</TableHead>
+                  <TableHead className="text-center">Lượt dùng</TableHead>
+                  <TableHead>Hạn dùng</TableHead>
+                  <TableHead>Hành động</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((v) => {
+                  const limitStr = v.totalLimit == null ? "Không giới hạn" : `${v.usedCount ?? 0}/${v.totalLimit}`;
+                  const valueStr = v.valueType === "percent" ? `${v.value}%` : `${v.value.toLocaleString("vi-VN")}₫`;
+
+                  return (
+                    <TableRow key={v.id ?? v.code} className="hover:bg-muted/30">
+                      <TableCell className="font-mono font-bold text-secondary-foreground">{v.id ?? v.code}</TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                            v.type === "ship" ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
+                          <Ticket className="size-3" />
+                          {v.type === "ship" ? "Freeship" : "Giảm giá"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <p className="font-medium text-sm">{v.title}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{v.description || "—"}</p>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-primary">{valueStr}</TableCell>
+                      <TableCell className="text-right">
+                        {v.minOrder && v.minOrder > 0 ? `${v.minOrder.toLocaleString("vi-VN")}₫` : "0₫"}
+                      </TableCell>
+                      <TableCell className="text-center text-xs">{limitStr}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {v.expiryDate ? formatDateShort(v.expiryDate) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1">
+                            <Switch
+                              checked={Boolean(v.isActive)}
+                              onCheckedChange={(checked) =>
+                                toggleMutation.mutate({ id: v.id, isActive: checked })
+                              }
+                            />
+                            <span className="text-xs text-muted-foreground w-8">
+                              {v.isActive ? "Bật" : "Tắt"}
+                            </span>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => openEdit(v)}>
+                            Sửa
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => setDeleting(v)}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 
+      {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -359,6 +442,28 @@ function VouchersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xóa voucher?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn xóa voucher <strong>{deleting?.id ?? deleting?.code}</strong>? Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteMutation.isPending || !deleting}
+              onClick={() => deleting && deleteMutation.mutate(deleting.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? "Đang xóa..." : "Xóa"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

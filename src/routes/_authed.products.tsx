@@ -57,6 +57,8 @@ type ProductItem = {
   imageUrl?: string | null;
   images?: string[] | null;
   categoryId?: string | null;
+  importPrice?: number;
+  taxRate?: number;
 };
 
 type ProductFormState = {
@@ -67,6 +69,8 @@ type ProductFormState = {
   oldPrice: string;
   imageUrls: string[];
   categoryId: string;
+  importPrice: string;
+  taxRate: string;
 };
 
 type PendingFile = { file: File; preview: string };
@@ -85,6 +89,8 @@ const defaultForm: ProductFormState = {
   oldPrice: "",
   imageUrls: [],
   categoryId: "",
+  importPrice: "",
+  taxRate: "10",
 };
 
 export const Route = createFileRoute("/_authed/products")({
@@ -188,6 +194,8 @@ function ProductsPage() {
       oldPrice: product.oldPrice == null ? "" : String(product.oldPrice),
       imageUrls: product.images?.length ? product.images : fallbackImages,
       categoryId: product.categoryId ?? "",
+      importPrice: String(product.importPrice ?? ""),
+      taxRate: String(product.taxRate ?? "10"),
     });
     setPendingFiles((prev) => { prev.forEach((pf) => URL.revokeObjectURL(pf.preview)); return []; });
     setNewImageUrl("");
@@ -243,6 +251,14 @@ function ProductsPage() {
       const oldPrice = Number(form.oldPrice);
       if (!Number.isFinite(oldPrice) || oldPrice < 0) return "Giá cũ không hợp lệ";
     }
+    if (form.importPrice.trim()) {
+      const importPrice = Number(form.importPrice);
+      if (!Number.isFinite(importPrice) || importPrice < 0) return "Giá nhập kho không hợp lệ";
+    }
+    if (form.taxRate.trim()) {
+      const taxRate = Number(form.taxRate);
+      if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) return "Thuế suất VAT phải từ 0% đến 100%";
+    }
     return "";
   }
 
@@ -279,6 +295,8 @@ function ProductsPage() {
         oldPrice: form.oldPrice.trim() ? Number(form.oldPrice) : undefined,
         imageUrls: allUrls,
         categoryId: form.categoryId || undefined,
+        importPrice: form.importPrice.trim() ? Number(form.importPrice) : undefined,
+        taxRate: form.taxRate.trim() ? Number(form.taxRate) : undefined,
       },
     });
   }
@@ -352,7 +370,9 @@ function ProductsPage() {
                   <TableHead>Tên sản phẩm</TableHead>
                   <TableHead>Danh mục</TableHead>
                   <TableHead>Còn hàng</TableHead>
-                  <TableHead>Giá</TableHead>
+                  <TableHead>Giá nhập</TableHead>
+                  <TableHead>Giá bán</TableHead>
+                  <TableHead>Thuế VAT</TableHead>
                   <TableHead>Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -364,7 +384,13 @@ function ProductsPage() {
                       {categories.data?.data?.find((c) => c.id === p.categoryId)?.name ?? "—"}
                     </TableCell>
                     <TableCell>{p.stock ?? 0}</TableCell>
-                    <TableCell className="font-bold">{formatVnd(p.price)}</TableCell>
+                    <TableCell className="text-muted-foreground font-medium">
+                      {p.importPrice ? formatVnd(p.importPrice) : "—"}
+                    </TableCell>
+                    <TableCell className="font-bold text-foreground">{formatVnd(p.price)}</TableCell>
+                    <TableCell className="font-medium text-amber-600 dark:text-amber-400">
+                      {p.taxRate ?? 10}%
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
@@ -436,6 +462,32 @@ function ProductsPage() {
                   min={0}
                   value={form.stock}
                   onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="product-import-price">Giá nhập kho *</Label>
+                <Input
+                  id="product-import-price"
+                  type="number"
+                  min={0}
+                  value={form.importPrice}
+                  onChange={(e) => setForm((prev) => ({ ...prev, importPrice: e.target.value }))}
+                  placeholder="Ví dụ: 100000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-tax-rate">Thuế suất VAT (%) *</Label>
+                <Input
+                  id="product-tax-rate"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.taxRate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, taxRate: e.target.value }))}
+                  placeholder="Ví dụ: 10"
                 />
               </div>
             </div>

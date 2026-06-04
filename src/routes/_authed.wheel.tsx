@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type PrizeType = "voucher" | "points" | "turns" | "miss";
 
@@ -163,6 +164,21 @@ function WheelPage() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: (payload: { id: string; isActive: boolean }) =>
+      apiFetch(`/wheel/admin/prizes/${payload.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: payload.isActive }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["wheel-admin-prizes"] });
+      toast.success("Cập nhật trạng thái thành công");
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Cập nhật trạng thái thất bại");
+    },
+  });
+
   function openCreate() {
     setEditing(null);
     setForm(defaultForm);
@@ -269,54 +285,65 @@ function WheelPage() {
               emptyText="Chưa có phần thưởng nào"
             />
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {list.map((p) => (
-                <div key={p.id} className="rounded-2xl bg-card p-4 shadow-[var(--shadow-card)]">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div className="grid size-12 place-items-center rounded-2xl bg-accent text-accent-foreground">
-                      <Gift className="size-6" />
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        (p.isActive ?? true)
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {(p.isActive ?? true) ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-                  <p className="line-clamp-2 text-sm font-semibold">{p.name ?? p.label ?? "—"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Loại: {TYPE_LABEL[p.type] ?? p.type}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Tỷ lệ: {Number(p.probability ?? 0).toFixed(2)}%
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Giá trị: {p.value == null ? "—" : p.value}{" "}
-                    {p.voucherId ? `• Voucher ${p.voucherId}` : ""}
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => openEdit(p)}
-                    >
-                      Sửa
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => setDeleting(p)}
-                    >
-                      Xóa
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tên phần thưởng</TableHead>
+                      <TableHead>Loại</TableHead>
+                      <TableHead className="text-right">Tỷ lệ (Probability)</TableHead>
+                      <TableHead>Giá trị thưởng</TableHead>
+                      <TableHead>Hành động</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {list.map((p) => {
+                      const valueStr = p.value == null ? "—" : p.value;
+                      const rewardDetail = p.type === "voucher" ? `Voucher: ${p.voucherId || "—"}` : valueStr;
+
+                      return (
+                        <TableRow key={p.id} className="hover:bg-muted/30">
+                          <TableCell className="font-semibold text-sm">
+                            <div className="flex items-center gap-2">
+                              <div className="grid size-8 place-items-center rounded-lg bg-accent text-accent-foreground shrink-0">
+                                <Gift className="size-4.5" />
+                              </div>
+                              <span>{p.name ?? p.label ?? "—"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">{TYPE_LABEL[p.type] ?? p.type}</TableCell>
+                          <TableCell className="text-right font-bold text-sm">
+                            {Number(p.probability ?? 0).toFixed(2)}%
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{rewardDetail}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1">
+                                <Switch
+                                  checked={p.isActive ?? true}
+                                  onCheckedChange={(checked) =>
+                                    toggleMutation.mutate({ id: p.id, isActive: checked })
+                                  }
+                                />
+                                <span className="text-xs text-muted-foreground w-12">
+                                  {p.isActive ?? true ? "Bật" : "Tắt"}
+                                </span>
+                              </div>
+                              <Button size="sm" variant="outline" onClick={() => openEdit(p)}>
+                                Sửa
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => setDeleting(p)}>
+                                Xóa
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </TabsContent>

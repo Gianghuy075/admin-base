@@ -18,6 +18,7 @@ import { Route as AuthedUsersRouteImport } from './routes/_authed.users'
 import { Route as AuthedUserSettingsRouteImport } from './routes/_authed.user-settings'
 import { Route as AuthedStockMovementsRouteImport } from './routes/_authed.stock-movements'
 import { Route as AuthedReviewsRouteImport } from './routes/_authed.reviews'
+import { Route as AuthedRevenueReportRouteImport } from './routes/_authed.revenue-report'
 import { Route as AuthedProductsRouteImport } from './routes/_authed.products'
 import { Route as AuthedPosOrdersRouteImport } from './routes/_authed.pos-orders'
 import { Route as AuthedOrdersRouteImport } from './routes/_authed.orders'
@@ -70,6 +71,11 @@ const AuthedReviewsRoute = AuthedReviewsRouteImport.update({
   path: '/reviews',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedRevenueReportRoute = AuthedRevenueReportRouteImport.update({
+  id: '/revenue-report',
+  path: '/revenue-report',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedProductsRoute = AuthedProductsRouteImport.update({
   id: '/products',
   path: '/products',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof AuthedOrdersRoute
   '/pos-orders': typeof AuthedPosOrdersRoute
   '/products': typeof AuthedProductsRoute
+  '/revenue-report': typeof AuthedRevenueReportRoute
   '/reviews': typeof AuthedReviewsRoute
   '/stock-movements': typeof AuthedStockMovementsRoute
   '/user-settings': typeof AuthedUserSettingsRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/orders': typeof AuthedOrdersRoute
   '/pos-orders': typeof AuthedPosOrdersRoute
   '/products': typeof AuthedProductsRoute
+  '/revenue-report': typeof AuthedRevenueReportRoute
   '/reviews': typeof AuthedReviewsRoute
   '/stock-movements': typeof AuthedStockMovementsRoute
   '/user-settings': typeof AuthedUserSettingsRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_authed/orders': typeof AuthedOrdersRoute
   '/_authed/pos-orders': typeof AuthedPosOrdersRoute
   '/_authed/products': typeof AuthedProductsRoute
+  '/_authed/revenue-report': typeof AuthedRevenueReportRoute
   '/_authed/reviews': typeof AuthedReviewsRoute
   '/_authed/stock-movements': typeof AuthedStockMovementsRoute
   '/_authed/user-settings': typeof AuthedUserSettingsRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/pos-orders'
     | '/products'
+    | '/revenue-report'
     | '/reviews'
     | '/stock-movements'
     | '/user-settings'
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/pos-orders'
     | '/products'
+    | '/revenue-report'
     | '/reviews'
     | '/stock-movements'
     | '/user-settings'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/_authed/orders'
     | '/_authed/pos-orders'
     | '/_authed/products'
+    | '/_authed/revenue-report'
     | '/_authed/reviews'
     | '/_authed/stock-movements'
     | '/_authed/user-settings'
@@ -284,6 +296,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedReviewsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/revenue-report': {
+      id: '/_authed/revenue-report'
+      path: '/revenue-report'
+      fullPath: '/revenue-report'
+      preLoaderRoute: typeof AuthedRevenueReportRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/products': {
       id: '/_authed/products'
       path: '/products'
@@ -344,6 +363,7 @@ interface AuthedRouteChildren {
   AuthedOrdersRoute: typeof AuthedOrdersRoute
   AuthedPosOrdersRoute: typeof AuthedPosOrdersRoute
   AuthedProductsRoute: typeof AuthedProductsRoute
+  AuthedRevenueReportRoute: typeof AuthedRevenueReportRoute
   AuthedReviewsRoute: typeof AuthedReviewsRoute
   AuthedStockMovementsRoute: typeof AuthedStockMovementsRoute
   AuthedUserSettingsRoute: typeof AuthedUserSettingsRoute
@@ -361,6 +381,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedOrdersRoute: AuthedOrdersRoute,
   AuthedPosOrdersRoute: AuthedPosOrdersRoute,
   AuthedProductsRoute: AuthedProductsRoute,
+  AuthedRevenueReportRoute: AuthedRevenueReportRoute,
   AuthedReviewsRoute: AuthedReviewsRoute,
   AuthedStockMovementsRoute: AuthedStockMovementsRoute,
   AuthedUserSettingsRoute: AuthedUserSettingsRoute,

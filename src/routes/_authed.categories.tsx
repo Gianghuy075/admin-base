@@ -28,6 +28,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+
 type CategoryItem = {
   id: string;
   name: string;
@@ -63,7 +65,7 @@ const VI_MAP: Record<string, string> = {
   ò: "o", ó: "o", ỏ: "o", õ: "o", ọ: "o",
   ô: "o", ồ: "o", ố: "o", ổ: "o", ỗ: "o", ộ: "o",
   ơ: "o", ờ: "o", ớ: "o", ở: "o", ỡ: "o", ợ: "o",
-  ù: "u", ú: "u", ủ: "u", ũ: "u", ụ: "u",
+  ù: "u", ú: "u", ủ: "u", ũ: "u", µ: "u",
   ư: "u", ừ: "u", ứ: "u", ử: "u", ữ: "u", ự: "u",
   ỳ: "y", ý: "y", ỷ: "y", ỹ: "y", ỵ: "y",
   đ: "d",
@@ -213,50 +215,66 @@ function CategoriesPage() {
       {q.isLoading || q.isError || list.length === 0 ? (
         <DataState loading={q.isLoading} error={q.error} empty={list.length === 0} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {list.map((c, idx) => {
-            const products = getProductCount(c);
-            const canDelete = products === 0;
-            return (
-              <div
-                key={c.id}
-                className="rounded-2xl bg-card p-4 text-center shadow-[var(--shadow-card)] transition hover:shadow-md"
-              >
-                <button className="w-full" onClick={() => openEdit(c)}>
-                  <div
-                    className={`mx-auto grid size-16 place-items-center rounded-2xl ${PASTELS[idx % PASTELS.length]}`}
-                  >
-                    {c.icon || c.image ? (
-                      <img
-                        src={c.icon ?? c.image ?? ""}
-                        alt={c.name}
-                        className="size-10 object-contain"
-                      />
-                    ) : (
-                      <Tag className="size-7" />
-                    )}
-                  </div>
-                  <div className="mt-3 min-w-0">
-                    <p className="truncate text-sm font-semibold">{c.name}</p>
-                    <p className="line-clamp-2 text-xs text-muted-foreground">
-                      {c.description ?? "Không có mô tả"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{products} sản phẩm</p>
-                  </div>
-                </button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 w-full"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => setDeleting(c)}
-                >
-                  <Trash2 className="size-4" />
-                  Xóa
-                </Button>
-              </div>
-            );
-          })}
+        <div className="rounded-2xl bg-card shadow-[var(--shadow-card)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Ảnh / Icon</TableHead>
+                  <TableHead>Tên danh mục</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead>Mô tả</TableHead>
+                  <TableHead className="text-center">Số sản phẩm</TableHead>
+                  <TableHead>Hành động</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((c, idx) => {
+                  const products = getProductCount(c);
+                  return (
+                    <TableRow key={c.id} className="hover:bg-muted/30">
+                      <TableCell>
+                        <div
+                          className={`grid size-10 place-items-center rounded-xl ${PASTELS[idx % PASTELS.length]}`}
+                        >
+                          {c.icon || c.image ? (
+                            <img
+                              src={c.icon ?? c.image ?? ""}
+                              alt={c.name}
+                              className="size-6 object-contain"
+                            />
+                          ) : (
+                            <Tag className="size-4" />
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm">{c.name}</TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{c.slug ?? "—"}</TableCell>
+                      <TableCell className="max-w-xs truncate text-muted-foreground text-xs">
+                        {c.description ?? "Không có mô tả"}
+                      </TableCell>
+                      <TableCell className="text-center font-bold text-sm">{products}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                            Sửa
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => setDeleting(c)}
+                          >
+                            Xóa
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
 

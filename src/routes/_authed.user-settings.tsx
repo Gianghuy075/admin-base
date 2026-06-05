@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, DataState } from "@/components/page-header";
 
 export const Route = createFileRoute("/_authed/user-settings")({
-  head: () => ({ meta: [{ title: "Cấu hình hệ thống — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Cấu hình hệ thống — HTMAdmin" }] }),
   component: UserSettingsPage,
 });
 

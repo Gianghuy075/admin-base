@@ -372,7 +372,7 @@ function PosOrdersPage() {
                           <CheckCircle2 className="size-3" />
                           Đã hoàn thành
                         </span>
-                      </td>
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-xs">{formatDate(o.createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1.5 justify-end">

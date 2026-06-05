@@ -37,7 +37,7 @@ function AuthedLayout() {
             <SidebarTrigger />
             <div className="flex-1" />
             <span className="text-xs text-muted-foreground hidden sm:inline">
-              HappyMall Admin Console
+              HTMAdmin Console
             </span>
           </header>
           <main className="flex-1 p-4 md:p-6 lg:p-8">

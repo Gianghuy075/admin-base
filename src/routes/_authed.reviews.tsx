@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, DataState } from "@/components/page-header";
 
 export const Route = createFileRoute("/_authed/reviews")({
-  head: () => ({ meta: [{ title: "Đánh giá — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Đánh giá — HTMAdmin" }] }),
   component: ReviewsPage,
 });
 

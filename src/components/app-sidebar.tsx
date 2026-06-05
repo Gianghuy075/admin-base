@@ -102,7 +102,7 @@ export function AppSidebar() {
             <ShoppingBag className="size-5" />
           </div>
           <div className="group-data-[collapsible=icon]:hidden">
-            <p className="font-bold text-sm leading-tight">HappyMall</p>
+            <p className="font-bold text-sm leading-tight">AdminMall</p>
             <p className="text-xs opacity-70">Admin</p>
           </div>
         </div>

@@ -53,7 +53,7 @@ const accountsSearchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authed/accounts")({
-  head: () => ({ meta: [{ title: "Tài khoản nhân viên — HappyMall Admin" }] }),
+  head: () => ({ meta: [{ title: "Tài khoản nhân viên — Admin" }] }),
   validateSearch: zodValidator(accountsSearchSchema),
   component: AccountsPage,
 });

@@ -47,7 +47,7 @@ export function TablePagination({
       {totalPages > 1 && (
         <div className="flex items-center gap-1">
           <Link
-            from={fromRoute}
+            from={fromRoute as any}
             search={(prev: any) => ({ ...prev, [searchKey]: Math.max(1, page - 1) })}
             className="h-8 rounded-md border border-input bg-card px-2.5 text-[11px] font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center text-muted-foreground"
             aria-disabled={page === 1}
@@ -62,7 +62,7 @@ export function TablePagination({
             ) : (
               <Link
                 key={p}
-                from={fromRoute}
+                from={fromRoute as any}
                 search={(prev: any) => ({ ...prev, [searchKey]: p })}
                 className={`grid h-8 min-w-8 place-items-center rounded-md text-[11px] font-semibold ${
                   p === page
@@ -75,7 +75,7 @@ export function TablePagination({
             ),
           )}
           <Link
-            from={fromRoute}
+            from={fromRoute as any}
             search={(prev: any) => ({ ...prev, [searchKey]: Math.min(totalPages, page + 1) })}
             className="h-8 rounded-md border border-input bg-card px-2.5 text-[11px] font-medium hover:bg-muted aria-disabled:pointer-events-none aria-disabled:opacity-50 inline-flex items-center text-muted-foreground"
             aria-disabled={page >= totalPages}

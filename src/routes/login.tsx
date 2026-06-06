@@ -32,6 +32,7 @@ function LoginPage() {
         auth: false,
         body: JSON.stringify({ username: username.trim(), password }),
       });
+      if (!res.success) throw new Error(res.error ?? "Đăng nhập thất bại");
       const token =
         res?.data?.token ||
         res?.data?.accessToken ||

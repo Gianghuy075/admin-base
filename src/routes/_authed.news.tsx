@@ -188,7 +188,7 @@ function NewsPage() {
       return;
     }
     const payload: Record<string, unknown> = {
-      id: form.id.trim() || undefined,
+      ...(!editing && { id: form.id.trim() || undefined }),
       title: form.title.trim(),
       category: form.category,
       thumbnail: form.thumbnail.trim() || undefined,

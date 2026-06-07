@@ -126,8 +126,8 @@ function WheelPage() {
   const voucherList = vouchers.data?.data ?? [];
 
   const history = useQuery({
-    queryKey: ["wheel-history"],
-    queryFn: () => apiFetch<WheelHistoryItem[]>("/wheel/history"),
+    queryKey: ["wheel-admin-history"],
+    queryFn: () => apiFetch<WheelHistoryItem[]>("/wheel/admin/history"),
   });
 
   const list = prizes.data?.data ?? EMPTY_PRIZES;

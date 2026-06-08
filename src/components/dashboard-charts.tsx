@@ -17,20 +17,16 @@ import { formatVnd } from "@/lib/format";
 
 const STATUS_COLORS: Record<string, string> = {
   placed: "#3b82f6",
-  paid: "#6366f1",
   shipping: "#f59e0b",
   delivered: "#10b981",
-  unreviewed: "#a855f7",
   cancelled: "#f43f5e",
   returned: "#94a3b8",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   placed: "Đã đặt",
-  paid: "Đã TT",
   shipping: "Đang giao",
   delivered: "Đã giao",
-  unreviewed: "Chờ ĐG",
   cancelled: "Đã hủy",
   returned: "Đã trả",
 };

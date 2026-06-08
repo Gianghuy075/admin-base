@@ -10,7 +10,7 @@ export interface OrderRow {
   code?: string;
   payMethod?: string | null;
   note?: string | null;
-  status: "placed" | "paid" | "shipping" | "delivered" | "unreviewed" | "cancelled" | "returned";
+  status: "placed" | "shipping" | "delivered" | "cancelled" | "returned";
   items?: OrderItem[];
   products?: OrderItem[]; // some fields use products instead of items
   total: number;
@@ -47,7 +47,7 @@ export const seedOrders: OrderRow[] = [
     code: "HM-1002",
     payMethod: "ZaloPay",
     note: "Không lấy đá lạnh",
-    status: "paid",
+    status: "placed",
     items: [
       { productId: "prod-2", name: "Nho Mẫu Đơn Hàn Quốc", price: 399000, quantity: 1 }
     ],

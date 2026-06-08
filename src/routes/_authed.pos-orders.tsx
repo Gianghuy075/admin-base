@@ -72,10 +72,6 @@ type PosOrderRow = {
 
 const SHIPPING_PROVIDERS = [
   "Khách tự mang về",
-  "Giao Hàng Nhanh",
-  "Giao Hàng Tiết Kiệm",
-  "Viettel Post",
-  "GrabExpress",
 ] as const;
 
 export const Route = createFileRoute("/_authed/pos-orders")({

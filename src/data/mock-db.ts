@@ -783,7 +783,7 @@ export const db = {
       posOrders.forEach((o) => {
         allMergedOrders.push({
           id: o.code,
-          status: o.status === "completed" ? "paid" : o.status, // normalise for dashboard status badge
+          status: o.status === "completed" ? "delivered" : o.status,
           total: o.total,
           payMethod: "Tại quầy (POS)",
           createdAt: o.createdAt,
@@ -801,7 +801,7 @@ export const db = {
         statusMap[o.status] = (statusMap[o.status] || 0) + 1;
       });
       posOrders.forEach((o) => {
-        const s = o.status === "completed" ? "paid" : o.status;
+        const s = o.status === "completed" ? "delivered" : o.status;
         statusMap[s] = (statusMap[s] || 0) + 1;
       });
       const ordersByStatus = Object.entries(statusMap).map(([status, count]) => ({

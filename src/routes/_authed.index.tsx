@@ -134,20 +134,16 @@ function MiniFinanceCard({
 
 const STATUS_LABEL: Record<string, string> = {
   placed: "Đã đặt",
-  paid: "Đã thanh toán",
   shipping: "Đang giao",
   delivered: "Đã giao",
-  unreviewed: "Chờ đánh giá",
   cancelled: "Đã hủy",
   returned: "Đã trả",
 };
 
 const STATUS_TONE: Record<string, string> = {
   placed: "bg-blue-100 text-blue-700",
-  paid: "bg-indigo-100 text-indigo-700",
   shipping: "bg-amber-100 text-amber-700",
   delivered: "bg-emerald-100 text-emerald-700",
-  unreviewed: "bg-purple-100 text-purple-700",
   cancelled: "bg-rose-100 text-rose-700",
   returned: "bg-gray-200 text-gray-700",
 };
